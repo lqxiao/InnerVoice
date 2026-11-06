@@ -13,9 +13,14 @@
 - Chat demo: `python latent/innervoice_chat.py --ckpt results/sxs/convfill_1.7B/ckpt` (run on a GPU host).
 
 ## Compute (read before launching anything)
-- This dev box has NO GPU. GPU hosts: `p41` (ours; `/scratch/liqiangx`, venv at `/scratch/liqiangx/venv`, `source /scratch/liqiangx/env.sh`),
-  `p4` (same layout; other users often occupy GPUs — check `nvidia-smi` first; only 23 GB disk free). `/home/liqiangx` on them is a
-  dead FSx symlink — never use it. Sync code with `rsync -az --exclude-from=.rsyncignore ./ p41:/scratch/liqiangx/think/`.
+- This dev box has NO GPU. GPU hosts: `p40`, `p41`, `p4`, `p43` (shared with other users — check `nvidia-smi` and who owns processes first).
+- **Shared environment on FSx (visible from all GPU hosts, 379 GB free):**
+  `/fsx-alignment/dedicated-fsx-data-repo-alignment-us-east-1/home/liqiangx/innervoice/` = `venv/`, `hf/` (Qwen3-1.7B/4B), `think/`
+  (code+data+results, no ckpts), `env.sh` → `source .../innervoice/env.sh` on any host. This is the user's real FSx home
+  (`/home/liqiangx` on p41/p43 points to the unmounted `/fsx-multimodal` and is dead; p40/p4 have local homes). Local copies on
+  `/scratch/liqiangx` (p41, p4) still exist; the root disks there are nearly full — prefer FSx for new work.
+- Docker images available: `vllm/vllm-openai:v0.9.1` on p40 (8 idle A100s, 112 GB disk), `slimerl/slime:latest` (SGLang 0.5.15) on p41.
+  These are the only way to run an inference engine here (pip vLLM/SGLang cannot be installed on glibc 2.26).
 - glibc 2.26: pin `numpy<2.3`, `scipy<1.15`, `pyarrow<18`; no `datasets`; pip vLLM does not install (max 0.21); docker needs sudo and
   the root disk is ~95% full — do not `docker pull` large images without checking `df -h /`.
 - Long SSH sessions get dropped and Midway SSH certs expire (~20 h): wait with `scripts/poll_remote.sh <host> "<check>"` (short polls),
