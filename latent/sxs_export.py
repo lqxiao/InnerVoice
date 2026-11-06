@@ -49,7 +49,9 @@ def write_config(model: SxSModel, out_dir: str):
     os.makedirs(out_dir, exist_ok=True)
     cfg = AutoConfig.from_pretrained(model.cfg.model_name)
     cfg.architectures = [ARCH]; cfg.router_hidden = model.cfg.router_hidden
+    cfg.auto_map = {"AutoModelForCausalLM": "modeling_innervoice.InnerVoiceQwen3ForCausalLM"}   # transformers remote code
     cfg.save_pretrained(out_dir); model.tok.save_pretrained(out_dir)
+    import shutil; shutil.copy(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "hf_release", "modeling_innervoice.py"), out_dir)
     try: GenerationConfig.from_pretrained(model.cfg.model_name).save_pretrained(out_dir)
     except Exception as e: print("no generation_config:", e)
 
