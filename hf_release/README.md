@@ -52,7 +52,20 @@ router (see `latent/sxs_rl_engine.py::label_types`).
 
 ## Evaluation (AIME 2025, Average@4, temperature 1.0, 12k-token budget, 30 problems x 4 samples, +-8 pt)
 
-EVAL_TABLE
+All rows below are our own runs with the same evaluation code (accuracy = last `\boxed{}` in the PUBLIC stream; 12k new-token cap);
+"unfinished" = samples that hit the cap. The paper's Qwen3-4B numbers (Base 66.3, SxS SFT 38.3) use a 32k budget and their own
+training set and are not directly comparable.
+
+| model | AIME25 Avg@4 | unfinished | think tokens | FCO | public blocks |
+|---|---|---|---|---|---|
+| Qwen3-4B base, native thinking mode | 0.342 | 0.617 | 10,300 | 10,301 | 0.4 |
+| Qwen3-4B + Standard CoT SFT (think-then-speak, same 1,550 Qwen3-32B traces) | 0.083 | 0.008 | 1,074 | 1,047 | 1.6 |
+| Qwen3-4B InnerVoice SFT, research variant with e_think (not released) | 0.208 | 0.008 | 3,570 | 614 | 3.0 |
+| **This checkpoint**: Qwen3-4B InnerVoice SFT without e_think (vLLM decode) | THIS_ACC | THIS_UNF | THIS_THINK | THIS_FCO | THIS_BLOCKS |
+
+InnerVoice starts speaking after ~600 tokens (FCO) and emits ~3 public chunks per problem, while the think-then-speak baseline
+trained on identical data speaks only once at the end and loses most of the accuracy; the base model keeps its accuracy only because
+it may think for 10k+ tokens before saying anything (and still fails to finish 62% of the time within the budget).
 
 Metric definitions follow *When to Think, When to Speak: Learning Disclosure Policies for LLM Reasoning* (ICML 2026, arXiv
 2605.03314): FCO = index of the first public token with task content, AIRW = mean private span before each public block.
