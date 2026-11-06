@@ -19,8 +19,14 @@
   (code+data+results, no ckpts), `env.sh` → `source .../innervoice/env.sh` on any host. This is the user's real FSx home
   (`/home/liqiangx` on p41/p43 points to the unmounted `/fsx-multimodal` and is dead; p40/p4 have local homes). Local copies on
   `/scratch/liqiangx` (p41, p4) still exist; the root disks there are nearly full — prefer FSx for new work.
-- Docker images available: `vllm/vllm-openai:v0.9.1` on p40 (8 idle A100s, 112 GB disk), `slimerl/slime:latest` (SGLang 0.5.15) on p41.
-  These are the only way to run an inference engine here (pip vLLM/SGLang cannot be installed on glibc 2.26).
+- Docker images available: `vllm/vllm-openai:v0.9.1` on p40 AND p4 (p4 docker root is `/tmp/instance_storage/docker_image`, 500 GB free;
+  `/tmp/instance_storage/liqiangx/` is our fast local scratch there), `slimerl/slime:latest` (SGLang 0.5.15) on p41. These are the only way
+  to run an inference engine here (pip vLLM/SGLang cannot be installed on glibc 2.26). p40's GPUs are mostly taken by other users now.
+- **RL Scenario B stack (engine rollouts):** `latent/vllm_plugin/` (vLLM model class `InnerVoiceQwen3ForCausalLM`: last-layer two experts +
+  router computed inside the forward; needs a `--no_e_think` checkpoint), `latent/sxs_export.py` (fold LoRA -> HF-named safetensors),
+  `latent/vllm_server.py` (one container per GPU, `/generate` + `/reload` hot weight update), `latent/sxs_rl_engine.py` (torchrun trainer,
+  grads all-reduced, router labels recomputed with `SxSModel.infer_route`, AIME25 eval through the engines every N steps).
+  Launch: `scripts/launch_rl_engine_4B.sh <ckpt> <name>` on the GPU host; `latent/test_engine_equiv.py` checks engine == HF decode.
 - glibc 2.26: pin `numpy<2.3`, `scipy<1.15`, `pyarrow<18`; no `datasets`; pip vLLM does not install (max 0.21); docker needs sudo and
   the root disk is ~95% full — do not `docker pull` large images without checking `df -h /`.
 - Long SSH sessions get dropped and Midway SSH certs expire (~20 h): wait with `scripts/poll_remote.sh <host> "<check>"` (short polls),
@@ -40,4 +46,6 @@
 - Done: K&K/MuSiQue SFT suite (1.7B/4B, ablations, Average@4, budget grid), ConvFill (judge), DeepMath->AIME25 (R1 teacher, 1.7B/4B),
   teacher-trace comparison (R1 / Qwen3-32B default & high effort / GPT-OSS-120B / GPT-6 Astra), RL round 1 (K&K+MuSiQue stage1/2,
   math RL with a 3k cap that collapsed AIME), budget-matched AIME control.
-- Open: RL with longer rollout budgets and voice-stage rewards; self-distillation needs a vLLM-class generator.
+- 2026-11-06: Scenario B built and verified (engine reproduces HF greedy decode token-for-token and router labels 882/882 on the 1.7B
+  no-e_think ckpt; 1.7B smoke run: rollout 3 s, sync ~10 s/step). 4B `q32high_sxs_4B_noethink` SFT (500 steps) is the RL start point.
+- Open: 4B engine-RL run (`results/rl/<name>`, eval.jsonl every 50 steps), voice-stage rewards; self-distillation now feasible via the engines.
