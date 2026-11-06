@@ -271,6 +271,18 @@ class SxSModel(nn.Module):
         self.moe.sample_route = False
         return toks, types
 
+    @torch.no_grad()
+    def infer_route(self, ids, mask):
+        """Recover the router's own (argmax) disclosure decisions for a full right-padded sequence: runs the transformer body only
+        (no lm_head logits) and returns (B,L) bool with route[b,t] = 'token t+1 is a think token'. Used to label engine rollouts;
+        requires use_e_think=False (the input embedding must not depend on the labels)."""
+        assert not self.cfg.use_e_think, "infer_route needs a --no_e_think model"
+        pos = (mask.long().cumsum(-1) - 1).clamp(min=0)
+        self.moe.route = None; self.moe.buf = None; self.moe.sample_route = False
+        body = (self.lm.get_base_model() if hasattr(self.lm, "get_base_model") else self.lm).model
+        body(inputs_embeds=self.inputs_embeds(ids, torch.zeros_like(ids)), attention_mask=mask, position_ids=pos, use_cache=False)
+        return self.moe.last_route
+
     def merge_lora(self):
         """Fold LoRA weights into the base for inference (fewer kernel launches per step). Keeps the two-expert MoE and router intact."""
         if self.cfg.lora_r > 0 and hasattr(self.lm, "merge_and_unload"):
