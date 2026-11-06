@@ -1,0 +1,206 @@
+{
+ "args": {
+  "model": "Qwen/Qwen3-1.7B",
+  "data_dir": "data",
+  "out": "results/p1_1.7B/K1aux_s0",
+  "K": 1,
+  "n_slots": 8,
+  "ctx_layer": -1,
+  "no_step_emb": false,
+  "lora_r": 16,
+  "distill": "none",
+  "aux_w": 1.0,
+  "distill_alpha": 1.0,
+  "distill_beta": 1.0,
+  "steps": 1500,
+  "bs": 32,
+  "grad_accum": 1,
+  "lr": 0.0002,
+  "lr_latent": 0.0003,
+  "warmup": 50,
+  "seed": 0,
+  "eval_every": 500,
+  "eval_K": "0,2,4,8",
+  "n_train": 0,
+  "max_new_tokens": 12,
+  "save": true
+ },
+ "train_time_s": 1417.8612229824066,
+ "trainable_params": 88920107,
+ "latent_params": 67205120,
+ "val@K1": {
+  "acc": 0.5511111111111111,
+  "n": 900,
+  "K": 1,
+  "per_task": {
+   "graph_reach": 0.9433333333333334,
+   "word_prob": 0.52,
+   "arith_chain": 0.19
+  },
+  "gpu_s_per_ex": 0.018854503313389916,
+  "latent_s_per_ex": 0.003353595737264388
+ },
+ "test@K1": {
+  "acc": 0.5466666666666666,
+  "n": 1500,
+  "K": 1,
+  "per_task": {
+   "word_prob": 0.516,
+   "arith_chain": 0.196,
+   "graph_reach": 0.928
+  },
+  "gpu_s_per_ex": 0.018539367717225103,
+  "latent_s_per_ex": 0.0034077204163186253
+ },
+ "heldout@K1": {
+  "acc": 0.011,
+  "n": 1000,
+  "K": 1,
+  "per_task": {
+   "even_sum": 0.002,
+   "arith_chain_deep": 0.02
+  },
+  "gpu_s_per_ex": 0.012710697508882731,
+  "latent_s_per_ex": 0.0013099302011542022
+ },
+ "val@K0": {
+  "acc": 0.5544444444444444,
+  "n": 900,
+  "K": 0,
+  "per_task": {
+   "graph_reach": 0.94,
+   "word_prob": 0.5266666666666666,
+   "arith_chain": 0.19666666666666666
+  },
+  "gpu_s_per_ex": 0.01857207853269453,
+  "latent_s_per_ex": 0.003065541268378082
+ },
+ "test@K0": {
+  "acc": 0.5413333333333333,
+  "n": 1500,
+  "K": 0,
+  "per_task": {
+   "word_prob": 0.508,
+   "arith_chain": 0.184,
+   "graph_reach": 0.932
+  },
+  "gpu_s_per_ex": 0.01821745515723402,
+  "latent_s_per_ex": 0.0031209148565928143
+ },
+ "heldout@K0": {
+  "acc": 0.011,
+  "n": 1000,
+  "K": 0,
+  "per_task": {
+   "even_sum": 0.002,
+   "arith_chain_deep": 0.02
+  },
+  "gpu_s_per_ex": 0.012643269560299814,
+  "latent_s_per_ex": 0.0011828830519225448
+ },
+ "val@K2": {
+  "acc": 0.5533333333333333,
+  "n": 900,
+  "K": 2,
+  "per_task": {
+   "graph_reach": 0.94,
+   "word_prob": 0.5333333333333333,
+   "arith_chain": 0.18666666666666668
+  },
+  "gpu_s_per_ex": 0.019021677267478988,
+  "latent_s_per_ex": 0.003631248395734777
+ },
+ "test@K2": {
+  "acc": 0.5453333333333333,
+  "n": 1500,
+  "K": 2,
+  "per_task": {
+   "word_prob": 0.522,
+   "arith_chain": 0.182,
+   "graph_reach": 0.932
+  },
+  "gpu_s_per_ex": 0.018788976234539102,
+  "latent_s_per_ex": 0.0036912029939703645
+ },
+ "heldout@K2": {
+  "acc": 0.01,
+  "n": 1000,
+  "K": 2,
+  "per_task": {
+   "even_sum": 0.002,
+   "arith_chain_deep": 0.018
+  },
+  "gpu_s_per_ex": 0.012954797810642049,
+  "latent_s_per_ex": 0.0014364373050630092
+ },
+ "val@K4": {
+  "acc": 0.5522222222222222,
+  "n": 900,
+  "K": 4,
+  "per_task": {
+   "graph_reach": 0.94,
+   "word_prob": 0.53,
+   "arith_chain": 0.18666666666666668
+  },
+  "gpu_s_per_ex": 0.019577783461039264,
+  "latent_s_per_ex": 0.004196751420127435
+ },
+ "test@K4": {
+  "acc": 0.5386666666666666,
+  "n": 1500,
+  "K": 4,
+  "per_task": {
+   "word_prob": 0.508,
+   "arith_chain": 0.178,
+   "graph_reach": 0.93
+  },
+  "gpu_s_per_ex": 0.01930200775961081,
+  "latent_s_per_ex": 0.004260966287149737
+ },
+ "heldout@K4": {
+  "acc": 0.01,
+  "n": 1000,
+  "K": 4,
+  "per_task": {
+   "even_sum": 0.002,
+   "arith_chain_deep": 0.018
+  },
+  "gpu_s_per_ex": 0.01321952650649473,
+  "latent_s_per_ex": 0.001690032540122047
+ },
+ "val@K8": {
+  "acc": 0.5566666666666666,
+  "n": 900,
+  "K": 8,
+  "per_task": {
+   "graph_reach": 0.9433333333333334,
+   "word_prob": 0.5333333333333333,
+   "arith_chain": 0.19333333333333333
+  },
+  "gpu_s_per_ex": 0.020718467806258963,
+  "latent_s_per_ex": 0.005328739502777656
+ },
+ "test@K8": {
+  "acc": 0.5353333333333333,
+  "n": 1500,
+  "K": 8,
+  "per_task": {
+   "word_prob": 0.498,
+   "arith_chain": 0.176,
+   "graph_reach": 0.932
+  },
+  "gpu_s_per_ex": 0.020422950481219837,
+  "latent_s_per_ex": 0.0054016581720982984
+ },
+ "heldout@K8": {
+  "acc": 0.011,
+  "n": 1000,
+  "K": 8,
+  "per_task": {
+   "even_sum": 0.002,
+   "arith_chain_deep": 0.02
+  },
+  "gpu_s_per_ex": 0.01357205605506897,
+  "latent_s_per_ex": 0.0021963020286057144
+ }
+}

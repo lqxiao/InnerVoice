@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+# regenerable data and raw records (keep summaries, tables, figures)
+data/
+data_sxs/
+data_convfill/
+data_math/
+results/**/records_*.jsonl
+results/**/preds_*.jsonl
+results/**/gate_trace_*.jsonl
+results/**/log.jsonl
+results/**/ckpt/
+results/p1_*/*/diag.json
+.rsyncignore

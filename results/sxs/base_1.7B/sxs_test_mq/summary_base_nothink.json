@@ -1,0 +1,18 @@
+{
+ "model": "Qwen/Qwen3-1.7B",
+ "thinking": 0,
+ "n": 125,
+ "samples": 1,
+ "final_acc": 0.272,
+ "all_correct": 0.232,
+ "chunk_acc": 0.5865384615384616,
+ "unfinished_think": 0.0,
+ "ARI": 70.668,
+ "ABO": 1.0,
+ "AIRW": 0.0,
+ "FCO": 15.792,
+ "n_tokens": 140.336,
+ "n_think": 0.0,
+ "n_speak": 140.336,
+ "n_speak_blocks": 1.0
+}

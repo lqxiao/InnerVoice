@@ -1,0 +1,48 @@
+{
+ "test/direct": {
+  "acc": 0.27066666666666667,
+  "per_task": {
+   "word_prob": 0.074,
+   "arith_chain": 0.012,
+   "graph_reach": 0.726
+  },
+  "n": 1500,
+  "avg_tokens": 9.608666666666666,
+  "avg_think_tokens": 0.0,
+  "gpu_s_per_ex": 0.012147788463626057
+ },
+ "test/cot": {
+  "acc": 0.8093333333333333,
+  "per_task": {
+   "word_prob": 0.82,
+   "arith_chain": 0.994,
+   "graph_reach": 0.614
+  },
+  "n": 1500,
+  "avg_tokens": 834.6506666666667,
+  "avg_think_tokens": 816.332,
+  "gpu_s_per_ex": 1.7888638903433458
+ },
+ "heldout/direct": {
+  "acc": 0.008,
+  "per_task": {
+   "even_sum": 0.016,
+   "arith_chain_deep": 0.0
+  },
+  "n": 1000,
+  "avg_tokens": 15.561,
+  "avg_think_tokens": 0.0,
+  "gpu_s_per_ex": 0.008403027579421178
+ },
+ "heldout/cot": {
+  "acc": 0.977,
+  "per_task": {
+   "even_sum": 0.994,
+   "arith_chain_deep": 0.96
+  },
+  "n": 1000,
+  "avg_tokens": 730.332,
+  "avg_think_tokens": 709.678,
+  "gpu_s_per_ex": 1.4028008554498665
+ }
+}

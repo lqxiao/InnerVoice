@@ -1,0 +1,16 @@
+{
+ "model": "Qwen/Qwen3-1.7B",
+ "ckpt": "results/sxs/dm_nothink_1.7B/ckpt",
+ "samples": 4,
+ "n": 30,
+ "acc": 0.0,
+ "unfinished": 0.0,
+ "ARI": 265.6375,
+ "ABO": 1.0,
+ "AIRW": 0.0,
+ "FCO": 3.933333333333333,
+ "n_tokens": 530.275,
+ "n_think": 0.0,
+ "n_speak": 530.275,
+ "n_speak_blocks": 1.0
+}

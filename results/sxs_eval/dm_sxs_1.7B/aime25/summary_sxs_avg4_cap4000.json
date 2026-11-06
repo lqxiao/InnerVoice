@@ -1,0 +1,16 @@
+{
+ "model": "Qwen/Qwen3-1.7B",
+ "ckpt": "results/sxs/dm_sxs_1.7B/ckpt",
+ "samples": 4,
+ "n": 30,
+ "acc": 0.1,
+ "unfinished": 0.775,
+ "ARI": 1566.5759644698699,
+ "ABO": 1328.9927314814815,
+ "AIRW": 841.6549206349207,
+ "FCO": 505.625,
+ "n_tokens": 3712.9333333333334,
+ "n_think": 3390.866666666667,
+ "n_speak": 322.06666666666666,
+ "n_speak_blocks": 3.075
+}

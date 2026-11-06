@@ -1,0 +1,103 @@
+{
+ "args": {
+  "model": "Qwen/Qwen3-1.7B",
+  "data_dir": "data",
+  "out": "results/p1_1.7B/K0_s1",
+  "K": 0,
+  "n_slots": 8,
+  "ctx_layer": -1,
+  "no_step_emb": false,
+  "z_init": "learned",
+  "recurrence": "adapter",
+  "lora_r": 16,
+  "distill": "none",
+  "aux_w": 0.0,
+  "distill_alpha": 1.0,
+  "distill_beta": 1.0,
+  "steps": 1500,
+  "bs": 32,
+  "grad_accum": 1,
+  "lr": 0.0002,
+  "lr_latent": 0.0003,
+  "warmup": 50,
+  "seed": 1,
+  "eval_every": 500,
+  "eval_K": "4",
+  "n_train": 0,
+  "max_new_tokens": 12,
+  "save": true
+ },
+ "train_time_s": 1375.0307712554932,
+ "trainable_params": 88920107,
+ "latent_params": 67205120,
+ "val@K0": {
+  "acc": 0.5855555555555556,
+  "n": 900,
+  "K": 0,
+  "per_task": {
+   "graph_reach": 0.9633333333333334,
+   "word_prob": 0.56,
+   "arith_chain": 0.23333333333333334
+  },
+  "gpu_s_per_ex": 0.01854794496204704,
+  "latent_s_per_ex": 0.0030552184079877206
+ },
+ "test@K0": {
+  "acc": 0.5686666666666667,
+  "n": 1500,
+  "K": 0,
+  "per_task": {
+   "word_prob": 0.546,
+   "arith_chain": 0.212,
+   "graph_reach": 0.948
+  },
+  "gpu_s_per_ex": 0.018214918460696936,
+  "latent_s_per_ex": 0.003109097661605726
+ },
+ "heldout@K0": {
+  "acc": 0.015,
+  "n": 1000,
+  "K": 0,
+  "per_task": {
+   "even_sum": 0.0,
+   "arith_chain_deep": 0.03
+  },
+  "gpu_s_per_ex": 0.012490697122877464,
+  "latent_s_per_ex": 0.0011815417590551078
+ },
+ "val@K4": {
+  "acc": 0.5833333333333334,
+  "n": 900,
+  "K": 4,
+  "per_task": {
+   "graph_reach": 0.9666666666666667,
+   "word_prob": 0.5466666666666666,
+   "arith_chain": 0.23666666666666666
+  },
+  "gpu_s_per_ex": 0.01968030632706359,
+  "latent_s_per_ex": 0.004185582551225606
+ },
+ "test@K4": {
+  "acc": 0.566,
+  "n": 1500,
+  "K": 4,
+  "per_task": {
+   "word_prob": 0.536,
+   "arith_chain": 0.214,
+   "graph_reach": 0.948
+  },
+  "gpu_s_per_ex": 0.01934321526826049,
+  "latent_s_per_ex": 0.00424845516992112
+ },
+ "heldout@K4": {
+  "acc": 0.012,
+  "n": 1000,
+  "K": 4,
+  "per_task": {
+   "even_sum": 0.0,
+   "arith_chain_deep": 0.024
+  },
+  "gpu_s_per_ex": 0.013005087189609185,
+  "latent_s_per_ex": 0.0016873237791005522
+ }
+}

@@ -1,0 +1,43 @@
+{
+ "mean_ttfc": 1.005872838234529,
+ "mean_gpu_time": 2.901560765747447,
+ "mean_hidden_steps": 8.41,
+ "mean_premature": 0.99,
+ "mean_n_chunks": 3.0,
+ "mean_end_time": 4.018278429330793,
+ "p50_stall": 0.0,
+ "p95_stall": 1.1114722758997222,
+ "p95_stall_per_traj": 0.35607167497277287,
+ "stall_rate": 0.44,
+ "policy": "gate",
+ "fixed_k": 0,
+ "thr": 0.5,
+ "step_cost": 0.2,
+ "n": 100,
+ "chunk_acc": 0.67,
+ "all_correct_acc": 0.28,
+ "premature_rate": 0.33,
+ "mean_k": 2.47,
+ "per_subtask": {
+  "word_prob": {
+   "acc": 0.2857142857142857,
+   "mean_k": 3.7551020408163267,
+   "n": 49
+  },
+  "easy": {
+   "acc": 1.0,
+   "mean_k": 0.0,
+   "n": 130
+  },
+  "graph_reach": {
+   "acc": 0.9,
+   "mean_k": 4.433333333333334,
+   "n": 60
+  },
+  "arith_chain": {
+   "acc": 0.04918032786885246,
+   "mean_k": 4.770491803278689,
+   "n": 61
+  }
+ }
+}

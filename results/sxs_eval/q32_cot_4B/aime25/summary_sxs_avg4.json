@@ -1,0 +1,16 @@
+{
+ "model": "Qwen/Qwen3-4B",
+ "ckpt": "results/sxs/q32_cot_4B/ckpt",
+ "samples": 4,
+ "n": 30,
+ "acc": 0.05,
+ "unfinished": 0.0,
+ "ARI": 451.69330426750764,
+ "ABO": 310.32564014202177,
+ "AIRW": 284.42068609022556,
+ "FCO": 311.95,
+ "n_tokens": 603.5083333333333,
+ "n_think": 299.7583333333333,
+ "n_speak": 303.75,
+ "n_speak_blocks": 1.3666666666666667
+}

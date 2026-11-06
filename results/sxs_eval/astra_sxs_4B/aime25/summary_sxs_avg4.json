@@ -1,0 +1,16 @@
+{
+ "model": "Qwen/Qwen3-4B",
+ "ckpt": "results/sxs/astra_sxs_4B/ckpt",
+ "samples": 4,
+ "n": 30,
+ "acc": 0.0,
+ "unfinished": 0.0,
+ "ARI": 412.92215176589275,
+ "ABO": 309.87201388888894,
+ "AIRW": 176.6236111111111,
+ "FCO": 180.76666666666668,
+ "n_tokens": 616.5083333333333,
+ "n_think": 329.025,
+ "n_speak": 287.48333333333335,
+ "n_speak_blocks": 2.183333333333333
+}

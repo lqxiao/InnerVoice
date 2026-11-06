@@ -1,0 +1,34 @@
+{
+ "results/sxs_eval/convfill_1.7B/test/records_gate_tc0.03.jsonl": {
+  "faithfulness": 4.9626974042256675,
+  "coherence": 4.1758253399531045,
+  "filler_ok": 3.223535041809082,
+  "filler_rate": 0.24193650793650795,
+  "mean_phrase_words": 14.170678336980306,
+  "n": 150
+ },
+ "results/sxs_eval/convfill_1.7B/test/records_nothink_tc0.03.jsonl": {
+  "faithfulness": 4.975622949600219,
+  "coherence": 4.080252906481425,
+  "filler_ok": 3.246924079259237,
+  "filler_rate": 0.49360210741442045,
+  "mean_phrase_words": 10.514866204162537,
+  "n": 150
+ },
+ "results/sxs_eval/convfill_cot_1.7B/test/records_gate_tc0.03.jsonl": {
+  "faithfulness": 4.962781381607056,
+  "coherence": 4.1994052426020305,
+  "filler_ok": 3.1924611059824626,
+  "filler_rate": 0.3301746031746032,
+  "mean_phrase_words": 13.186147186147187,
+  "n": 150
+ },
+ "results/sxs_eval/convfill_nothink_1.7B/test/records_gate_tc0.03.jsonl": {
+  "faithfulness": 4.956460030873616,
+  "coherence": 4.17232838789622,
+  "filler_ok": 3.170796100298564,
+  "filler_rate": 0.3388835978835979,
+  "mean_phrase_words": 14.495176848874598,
+  "n": 150
+ }
+}

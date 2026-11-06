@@ -1,0 +1,68 @@
+{
+ "args": {
+  "model": "Qwen/Qwen3-1.7B",
+  "data_dir": "data",
+  "out": "results/smoke_lm",
+  "K": 2,
+  "n_slots": 8,
+  "ctx_layer": -1,
+  "no_step_emb": false,
+  "z_init": "learned",
+  "recurrence": "lm",
+  "lora_r": 16,
+  "distill": "none",
+  "aux_w": 0.0,
+  "distill_alpha": 1.0,
+  "distill_beta": 1.0,
+  "steps": 3,
+  "bs": 8,
+  "grad_accum": 1,
+  "lr": 0.0002,
+  "lr_latent": 0.0003,
+  "warmup": 50,
+  "seed": 0,
+  "eval_every": 0,
+  "eval_K": "",
+  "n_train": 64,
+  "max_new_tokens": 12,
+  "save": false
+ },
+ "train_time_s": 3.534656524658203,
+ "trainable_params": 93120555,
+ "latent_params": 71405568,
+ "val@K2": {
+  "acc": 0.0022222222222222222,
+  "n": 900,
+  "K": 2,
+  "per_task": {
+   "graph_reach": 0.0033333333333333335,
+   "word_prob": 0.0033333333333333335,
+   "arith_chain": 0.0
+  },
+  "gpu_s_per_ex": 0.04218581249083703,
+  "latent_s_per_ex": 0.010947708166204393
+ },
+ "test@K2": {
+  "acc": 0.0013333333333333333,
+  "n": 1500,
+  "K": 2,
+  "per_task": {
+   "word_prob": 0.004,
+   "arith_chain": 0.0,
+   "graph_reach": 0.0
+  },
+  "gpu_s_per_ex": 0.042067970145493745,
+  "latent_s_per_ex": 0.01114677902093778
+ },
+ "heldout@K2": {
+  "acc": 0.0,
+  "n": 1000,
+  "K": 2,
+  "per_task": {
+   "even_sum": 0.0,
+   "arith_chain_deep": 0.0
+  },
+  "gpu_s_per_ex": 0.026742041834862902,
+  "latent_s_per_ex": 0.0064494604314677415
+ }
+}

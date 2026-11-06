@@ -1,0 +1,37 @@
+{
+ "test/direct": {
+  "acc": 0.2713333333333333,
+  "per_task": {
+   "word_prob": 0.116,
+   "arith_chain": 0.058,
+   "graph_reach": 0.64
+  },
+  "n": 1500,
+  "avg_tokens": 8.862666666666666,
+  "avg_think_tokens": 0.0,
+  "gpu_s_per_ex": 0.02400781594992926
+ },
+ "test/cot": {
+  "acc": 0.7993333333333333,
+  "per_task": {
+   "word_prob": 0.91,
+   "arith_chain": 1.0,
+   "graph_reach": 0.488
+  },
+  "n": 1500,
+  "avg_tokens": 828.7913333333333,
+  "avg_think_tokens": 822.2886666666667,
+  "gpu_s_per_ex": 3.4442759267174017
+ },
+ "heldout/direct": {
+  "acc": 0.032,
+  "per_task": {
+   "even_sum": 0.064,
+   "arith_chain_deep": 0.0
+  },
+  "n": 1000,
+  "avg_tokens": 12.3,
+  "avg_think_tokens": 0.0,
+  "gpu_s_per_ex": 0.012268021152121946
+ }
+}
