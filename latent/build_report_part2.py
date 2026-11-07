@@ -194,6 +194,21 @@ policy, greedy, 150 test examples per set (same protocol as the SFT rows).
   which is fatal on AIME where the SFT model's wins came from long reasoning. Lesson for the voice-stage reward as well: never let a budget
   cap silently zero the reward of long-but-correct trajectories (use the paper's 39k-token budgets, or score truncated rollouts by a
   continuation / partial-credit rule).
+- **Math RL round 2 (1.7B, Qwen3-32B-high SFT start, 8k rollout cap + DAPO-style overlong masking, gated FCO reward 0.1·FCO/600 only
+  when correct, 60 steps x 8 prompts x 8 rollouts, HF decode, ~21 min/step)**: in-training reward 0.59 -> 0.62 (first/last 10 steps),
+  training accuracy 0.72 -> 0.69, FCO 1,120 -> 854, think tokens 2,635 -> 2,909, public blocks 2.6 -> 3.4 (i.e. the policy moved first
+  content earlier without shortening reasoning - the collapse of round 1 did not recur). AIME25 Average@4 (n=120): **0.117** vs the SFT
+  start 0.192 (unfinished 0.067 vs 0.117; FCO 476 vs 1,298; think 4,579 vs 4,745; blocks 4.4 vs 3.0). The -7.5 pt change is within the
+  ±8 pt noise of this eval, so round 2 is "no gain, earlier speech" - 60 steps of 64 rollouts is far below the paper's 480 steps x 512.
+- **Scenario B infrastructure (2026-11-06/07)**: rollouts moved to vLLM 0.9.1 (custom `InnerVoiceQwen3ForCausalLM` class, one engine per
+  GPU, in-place weight hot-reload each step; LoRA folded into the weights) with a torchrun trainer whose grads are all-reduced; router
+  labels are recomputed on the trainer. The engine reproduces HF streaming decode token-for-token (8/8 sequences, 882/882 labels). On one
+  8-GPU A100 host the 4B step (32 prompts x 8 rollouts, 8k cap) takes ~3.3 min: rollout 95-105 s, label pass 18 s, gradient 51-55 s,
+  weight sync 28 s - 6x faster than HF decode at 4x the batch. The 4B start checkpoint was retrained without e_think (the engine cannot
+  add an input-side embedding); its AIME25 Average@4 is 0.158 (n=120, unfinished 0.058, FCO 1,205, think 3,094, blocks 3.7) vs 0.208 for
+  the e_think variant - within noise. Released on the Hub as `liqiangx/InnerVoice-Qwen3-4B` (merged weights + transformers remote code).
+  The 4B run (`results/rl/q32high_4B_engine`, AIME25 every 50 steps) is in progress; its first steps show training accuracy 0.83-0.85 on
+  the 1,550 SFT problems, i.e. the SFT prompt set is too easy for RL and the prompt pool should move to unseen DeepMath problems.
 - Next: longer runs (≥500 steps), ≥2 seeds, Average@4 evaluation, rollout budgets that do not truncate correct reasoning, and the
   voice-stage rewards (stall/TTFC in seconds with randomised per-token cost).
 
