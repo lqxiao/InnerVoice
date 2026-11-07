@@ -4,7 +4,7 @@
 set -u
 CKPT=$1; NAME=$2; STEPS=${3:-300}; MAXNEW=${4:-8000}
 # reward / data overrides (env): IV_DATA IV_G IV_WFCO IV_WUNSUP IV_WSHORT
-DATA=${IV_DATA:-data_math/self/sxs_q32high_train.jsonl}; G=${IV_G:-8}; WFCO=${IV_WFCO:-0.1}; WUNSUP=${IV_WUNSUP:-0}; WSHORT=${IV_WSHORT:-0}
+EXTRA=${IV_EXTRA:-}; DATA=${IV_DATA:-data_math/self/sxs_q32high_train.jsonl}; G=${IV_G:-8}; WFCO=${IV_WFCO:-0.1}; WUNSUP=${IV_WUNSUP:-0}; WSHORT=${IV_WSHORT:-0}
 H=/fsx-alignment/dedicated-fsx-data-repo-alignment-us-east-1/home/liqiangx/innervoice
 source $H/env.sh
 LIVE=/tmp/instance_storage/liqiangx/live_$NAME; OUT=results/rl/$NAME; mkdir -p logs results/rl
@@ -22,6 +22,6 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 nohup torchrun --nproc_per_node=4 --master_port=296
   --model Qwen/Qwen3-4B --ckpt $CKPT --data $DATA --out $OUT --live $LIVE \
   --engines http://127.0.0.1:8001,http://127.0.0.1:8002,http://127.0.0.1:8003,http://127.0.0.1:8004 \
   --steps $STEPS --prompts 32 --G $G --max_new $MAXNEW --micro_bs 2 --label_bs 8 \
-  --w_fco $WFCO --fco_ref 600 --w_unsup $WUNSUP --w_short $WSHORT --eval_every 50 --aime_data $H/extdata/aime25/data/train-00000-of-00001.parquet --aime_samples 4 --aime_max_new 12000 \
+  --w_fco $WFCO --fco_ref 600 --w_unsup $WUNSUP --w_short $WSHORT --eval_every 50 --aime_data $H/extdata/aime25/data/train-00000-of-00001.parquet --aime_samples 4 --aime_max_new 12000 $EXTRA \
   > logs/rl_$NAME.log 2>&1 &
 echo "trainer launched: logs/rl_$NAME.log"

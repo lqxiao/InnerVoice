@@ -51,14 +51,21 @@ def disclosure_stats(tok, toks, types, prompt_text, short_len=4):
             seen |= a
     return {"n_unsup": n_unsup, "n_judged": n_judged, "n_short": n_short}
 
-def score_rollout(ex, chunks, tm, w, ds=None):
+def score_rollout(ex, chunks, tm, w, ds=None, finished=True):
     src = ex["source"]
     if src == "deepmath":
         final_ok = math_correct("\n".join(chunks), ex["final_answer"]); oks = [final_ok]; prem = unp = 0; inter = []
         ds = ds or {"n_unsup": 0, "n_judged": 0, "n_short": 0}
         unsup_frac = ds["n_unsup"] / max(1, ds["n_judged"])
-        R = (float(final_ok) - (w["fco"] * tm["FCO"] / w["fco_ref"] if final_ok else 0.0) - w["len"] * tm["n_tokens"] / w["len_ref"]
-             - w.get("unsup", 0.0) * unsup_frac - w.get("short", 0.0) * ds["n_short"])
+        if w.get("q", 0.0) > 0:
+            # GATED mode: correctness is the only sign-carrying signal; disclosure quality Q in [0,1] is a bounded bonus paid ONLY on
+            # correct rollouts (so no term can be gamed by an incorrect answer), and truncated rollouts pay a flat penalty
+            # (soft overlong punishment) instead of being masked out.
+            Q = ((1.0 - unsup_frac) + (1.0 - min(1.0, ds["n_short"] / 5.0)) + (1.0 - min(1.0, tm["FCO"] / w.get("fco_ref_q", 1200.0)))) / 3.0
+            R = float(final_ok) * (1.0 + w["q"] * Q) - w.get("trunc", 0.0) * float(not finished)
+        else:
+            R = (float(final_ok) - (w["fco"] * tm["FCO"] / w["fco_ref"] if final_ok else 0.0) - w["len"] * tm["n_tokens"] / w["len_ref"]
+                 - w.get("unsup", 0.0) * unsup_frac - w.get("short", 0.0) * ds["n_short"])
         return R, {"final": float(final_ok), "chunk_acc": float(final_ok), "prem": 0, "unp": 0, "FCO": tm["FCO"], "n_tok": tm["n_tokens"], "n_think": tm["n_think"], "blocks": tm["n_speak_blocks"],
                    "unsup_frac": unsup_frac, "n_short": ds["n_short"]}
     if src == "kk":

@@ -100,6 +100,11 @@ def main():
     ap.add_argument("--w_inter", type=float, default=0.5); ap.add_argument("--w_prem", type=float, default=1.0); ap.add_argument("--w_fmt", type=float, default=0.2)
     ap.add_argument("--w_fco", type=float, default=0.1); ap.add_argument("--fco_ref", type=float, default=600.0); ap.add_argument("--w_len", type=float, default=0.0); ap.add_argument("--len_ref", type=float, default=3000.0)
     ap.add_argument("--w_unsup", type=float, default=0.0, help="penalty x fraction of public lines stating anchors not derived in think/prompt before them")
+    ap.add_argument("--w_q", type=float, default=0.0, help="GATED reward: R = correct*(1 + w_q*Q) - w_trunc*truncated; Q = disclosure quality in [0,1] (unsupported lines, flicker, FCO)")
+    ap.add_argument("--fco_ref_q", type=float, default=1200.0); ap.add_argument("--w_trunc", type=float, default=0.0, help="flat penalty for rollouts cut by --max_new (soft overlong punishment)")
+    ap.add_argument("--soft_overlong", action="store_true", help="keep truncated rollouts in the group (with --w_trunc) instead of masking them out")
+    ap.add_argument("--kl_beta", type=float, default=0.0, help="KL(policy || SFT reference) on response tokens, k3 estimator, per-token mean")
+    ap.add_argument("--kl_route_beta", type=float, default=0.0, help="KL on the router's disclosure decisions vs the SFT reference router")
     ap.add_argument("--w_short", type=float, default=0.0, help="penalty per speak block shorter than 4 tokens (router flicker)")
     ap.add_argument("--eval_every", type=int, default=50); ap.add_argument("--aime_data", default=""); ap.add_argument("--aime_samples", type=int, default=4); ap.add_argument("--aime_max_new", type=int, default=12000)
     ap.add_argument("--no_expert_ft", action="store_true"); ap.add_argument("--seed", type=int, default=0); ap.add_argument("--no_eval0", action="store_true")
@@ -115,8 +120,24 @@ def main():
     engines = Engines(a.engines.split(","), eos, model.eos_id) if is0 else None
     rows = [json.loads(l) for l in open(a.data)]; rng = random.Random(a.seed)
     aime_rows = load_aime(a.aime_data) if a.aime_data else []
-    w = {"inter": a.w_inter, "prem": a.w_prem, "fmt": a.w_fmt, "fco": a.w_fco, "fco_ref": a.fco_ref, "len": a.w_len, "len_ref": a.len_ref, "unsup": a.w_unsup, "short": a.w_short}
+    w = {"inter": a.w_inter, "prem": a.w_prem, "fmt": a.w_fmt, "fco": a.w_fco, "fco_ref": a.fco_ref, "len": a.w_len, "len_ref": a.len_ref, "unsup": a.w_unsup, "short": a.w_short,
+         "q": a.w_q, "fco_ref_q": a.fco_ref_q, "trunc": a.w_trunc}
     lora_p, rest_p = model.param_groups(); params = model.trainable_parameters()
+    use_kl = a.kl_beta > 0 or a.kl_route_beta > 0
+    ref_store = [p.detach().clone() for p in params] if use_kl else None      # frozen SFT weights for the KL reference (~400 MB)
+    @torch.no_grad()
+    def swap_ref():
+        for p, r in zip(params, ref_store):
+            tmp = p.data.clone(); p.data.copy_(r); r.copy_(tmp)
+    def ref_logps(mbs):
+        """Per-token reference log-probs (tokens, decisions) for a list of micro-batches, computed with the SFT weights swapped in."""
+        out = []
+        swap_ref(); model.eval()
+        with torch.no_grad():
+            for mb in mbs:
+                r = model.forward_train(mb["ids"], mb["mask"], mb["is_think"], mb["loss_mask"], mb["route_label"], mb["route_mask"], return_per_seq=True)
+                out.append((r["logp_tok"].detach(), r["logp_route"].detach()))
+        swap_ref(); return out
     opt = torch.optim.AdamW([{"params": lora_p, "lr": a.lr_lora}, {"params": rest_p, "lr": a.lr_rest}], weight_decay=0.0)
     if is0: engines.wait_ready(); print(f"{len(engines.urls)} engines ready; trainer world={W}", flush=True)
     dist.barrier()
@@ -160,26 +181,41 @@ def main():
         adv = infos = None
         if is0:
             Rs, infos = [], []
-            for e, t, y in zip(exs_rep, toks, types):
+            for e, t, y, f in zip(exs_rep, toks, types, fin):
                 ch = public_chunks(tok, t, y); tm = token_metrics(y, t, tok, e["source"]); ds = disclosure_stats(tok, t, y, e["prompt"])
-                R, info = score_rollout(e, ch, tm, w, ds); Rs.append(R); infos.append(info)
-            R = torch.tensor(Rs).view(a.prompts, a.G); finished = torch.tensor(fin).view(a.prompts, a.G); valid = finished.float(); cnt = valid.sum(1, keepdim=True).clamp(min=1)
+                R, info = score_rollout(e, ch, tm, w, ds, finished=f); Rs.append(R); infos.append(info)
+            R = torch.tensor(Rs).view(a.prompts, a.G); finished = torch.tensor(fin).view(a.prompts, a.G)
+            valid = torch.ones_like(finished).float() if a.soft_overlong else finished.float(); cnt = valid.sum(1, keepdim=True).clamp(min=1)
             mean = (R * valid).sum(1, keepdim=True) / cnt; var = (((R - mean) ** 2) * valid).sum(1, keepdim=True) / cnt
             adv = ((R - mean) / (var.sqrt() + 1e-6)) * valid; keep = (var.sqrt().squeeze(1) > 1e-6).repeat_interleave(a.G); adv = (adv.view(-1) * keep.float()).tolist()
         adv = torch.tensor(bcast(adv))
         # ---- policy gradient on this rank's shard; grads summed across ranks
-        t2 = time.time(); model.train(); opt.zero_grad(set_to_none=True); Bn = len(toks); loss_sum = 0.0
-        mine = [i for i in list(range(Bn))[rank::W] if abs(adv[i]) > 0]; mine.sort(key=lambda i: -(len(p_ids[i]) + len(toks[i])))
+        t2 = time.time(); Bn = len(toks); loss_sum = 0.0; kl_tok_sum = kl_route_sum = 0.0
+        mine = [i for i in list(range(Bn))[rank::W] if use_kl or abs(adv[i]) > 0]; mine.sort(key=lambda i: -(len(p_ids[i]) + len(toks[i])))
+        mbs = []
         for s in range(0, len(mine), a.micro_bs):
             sl = mine[s:s + a.micro_bs]
             batch = build_train_batch(tok, [p_ids[i] for i in sl], [toks[i] for i in sl], [types[i] for i in sl], tok.pad_token_id)
-            mb = {k: v.to(dev) for k, v in batch.items()}
+            mbs.append((sl, {k: v.to(dev) for k, v in batch.items()}))
+        refs = ref_logps([mb for _, mb in mbs]) if use_kl else [None] * len(mbs)
+        model.train(); opt.zero_grad(set_to_none=True)
+        for (sl, mb), ref in zip(mbs, refs):
             res = model.forward_train(mb["ids"], mb["mask"], mb["is_think"], mb["loss_mask"], mb["route_label"], mb["route_mask"], return_per_seq=True)
-            obj = (res["logp_tok_seq"] + a.w_route * res["logp_route_seq"]) / res["n_resp"].clamp(min=1)
-            loss = -(adv[sl].to(dev) * obj).sum() / Bn; loss.backward(); loss_sum += loss.item()
+            n = res["n_resp"].clamp(min=1)
+            obj = (res["logp_tok_seq"] + a.w_route * res["logp_route_seq"]) / n
+            loss = -(adv[sl].to(dev) * obj).sum() / Bn
+            if use_kl:
+                # k3 estimator per token: exp(ref-cur) - (ref-cur) - 1 >= 0; averaged over response tokens, summed over sequences / Bn
+                lm_ = mb["loss_mask"][:, 1:].float(); rm_ = mb["route_mask"].float()
+                d_tok = ((ref[0] - res["logp_tok"]).clamp(-10, 10)) * lm_; kl_tok = ((torch.exp(d_tok) - d_tok - 1) * lm_).sum(-1) / n
+                d_rt = ((ref[1] - res["logp_route"]).clamp(-10, 10)) * rm_; kl_rt = ((torch.exp(d_rt) - d_rt - 1) * rm_).sum(-1) / n
+                loss = loss + (a.kl_beta * kl_tok + a.kl_route_beta * kl_rt).sum() / Bn
+                kl_tok_sum += kl_tok.sum().item(); kl_route_sum += kl_rt.sum().item()
+            loss.backward(); loss_sum += loss.item()
         for p in params:
             if p.grad is None: p.grad = torch.zeros_like(p)
             dist.all_reduce(p.grad, op=dist.ReduceOp.SUM)
+        kls = torch.tensor([kl_tok_sum, kl_route_sum], device=dev); dist.all_reduce(kls); kl_tok_all, kl_route_all = kls.tolist()
         gn = torch.nn.utils.clip_grad_norm_(params, 1.0); opt.step(); opt.zero_grad(set_to_none=True); torch.cuda.empty_cache(); t_train = time.time() - t2
         # ---- weight sync: fold LoRA -> live dir -> engines reload
         t3 = time.time()
@@ -189,10 +225,11 @@ def main():
         if is0:
             mi = {k: statistics.mean(x[k] for x in infos) for k in infos[0]}
             mi.update(step=step, R=float(R.mean()), groups_kept=int((adv.view(a.prompts, a.G).abs().sum(1) > 0).sum()), n_truncated=int((~finished).sum()), loss=loss_sum, gn=float(gn),
-                      t_rollout=t_roll, t_label=t_label, t_train=t_train, t_sync=t_sync, mean_len=statistics.mean(len(t) for t in toks), p95_len=sorted(len(t) for t in toks)[int(0.95 * (len(toks) - 1))])
+                      t_rollout=t_roll, t_label=t_label, t_train=t_train, t_sync=t_sync, mean_len=statistics.mean(len(t) for t in toks), p95_len=sorted(len(t) for t in toks)[int(0.95 * (len(toks) - 1))],
+                      kl_tok=kl_tok_all / Bn, kl_route=kl_route_all / Bn)
             log.log(**mi)
             print(f"step {step}: R={mi['R']:.3f} acc={mi['final']:.3f} FCO={mi['FCO']:.0f} think={mi['n_think']:.0f} blocks={mi['blocks']:.2f} unsup={mi.get('unsup_frac', 0):.2f} short={mi.get('n_short', 0):.1f} trunc={mi['n_truncated']} groups={mi['groups_kept']}/{a.prompts} "
-                  f"| roll {t_roll:.0f}s label {t_label:.0f}s train {t_train:.0f}s sync {t_sync:.0f}s", flush=True)
+                  f"kl={mi['kl_tok']:.4f}/{mi['kl_route']:.4f} | roll {t_roll:.0f}s label {t_label:.0f}s train {t_train:.0f}s sync {t_sync:.0f}s", flush=True)
         if step % a.eval_every == 0 or step == a.steps:
             if is0: model.save(os.path.join(a.out, f"ckpt_step{step}"))
             run_eval(step)

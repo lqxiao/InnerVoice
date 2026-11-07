@@ -137,6 +137,8 @@ class SxSModel(nn.Module):
             res["logp_tok_seq"] = -(ce * lm_).sum(-1)                        # (B,) sum log p(token) over response tokens
             res["logp_route_seq"] = -(bce * route_mask.float()).sum(-1)      # (B,) sum log pi(disclosure decision) over response positions
             res["n_resp"] = lm_.sum(-1)
+            res["logp_tok"] = -ce                                            # (B,L-1) per-token log p(target); mask with loss_mask[:,1:]
+            res["logp_route"] = -bce                                         # (B,L) per-position log pi(taken decision); mask with route_mask
         return res
 
     # ------------------------------------------------------------------ streaming generation (batch 1)

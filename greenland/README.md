@@ -18,3 +18,8 @@ w_unsup 0.5 / w_short 0.05 / w_fco 0.05, eval every 50).
   `ModuleNotFoundError: latent.simulator` (incomplete copy of the `latent/` import closure) and the `| tee` hid the exit code
   (job marked Succeeded). Fix: full closure copied, `set -o pipefail`. Resubmitted as `liqiangx-innervoice-rl-1107-063208`
   JobId f259c58b-937d-4a71-bad9-0a26b1227bf2.
+- job 3 (f259c58b, `innervoice-rl-1107-063208`): ran 112 steps (~4 min/step on 8xH200 at 32x16, 12k cap) and COLLAPSED:
+  AIME25 0.192 (step 0) -> 0.025 (50) -> 0.000 (100); think tokens 2,866 -> 318 -> 45; flicker (short blocks) 0.45 -> 21 -> 0.2;
+  blocks 3.7 -> 30 -> 1.3. Samples: step 50 = word-level think/speak oscillation; step 100 = 70-token think then one short public
+  paragraph (speak-everything, brief). Dense penalties (unsup 0.5, short 0.05/block, FCO) dominated the sparse correctness signal and
+  there was no KL anchor to the SFT policy. Cancelled at step 112. Checkpoints/logs mirrored to S3 (log.jsonl mirror was stale while open).
