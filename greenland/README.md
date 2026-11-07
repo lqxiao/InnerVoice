@@ -23,3 +23,6 @@ w_unsup 0.5 / w_short 0.05 / w_fco 0.05, eval every 50).
   blocks 3.7 -> 30 -> 1.3. Samples: step 50 = word-level think/speak oscillation; step 100 = 70-token think then one short public
   paragraph (speak-everything, brief). Dense penalties (unsup 0.5, short 0.05/block, FCO) dominated the sparse correctness signal and
   there was no KL anchor to the SFT policy. Cancelled at step 112. Checkpoints/logs mirrored to S3 (log.jsonl mirror was stale while open).
+- job 4 `liqiangx-innervoice-rl-1107-142214` JobId 310433e2-faf3-4c10-8869-6836580e6bdd: reward v3 (gated bounded Q bonus, soft
+  overlong -0.5, KL 0.02 tokens / 0.05 router to the frozen SFT reference), unseen DeepMath pool, 32x16, 12k, 480 steps. p4 runs the
+  same reward at 32x8 / 8k as `results/rl/q32high_4B_engine_v3` (step 1 KL = 0 sanity check passed; ~4.2 min/step).
