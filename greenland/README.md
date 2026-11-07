@@ -30,3 +30,4 @@ w_unsup 0.5 / w_short 0.05 / w_fco 0.05, eval every 50).
   flicker returned between steps 70-80 (short blocks 1.4 -> 20/rollout; AIME 166 blocks, 112 short). Q's flicker term saturates at 5
   short blocks and the router KL at 0.05 was too weak. Reward v4 = v3 + unconditional flicker penalty 0.3*min(1, n_short/10) +
   router KL 0.5. Job 4 (310433e2, still queued, v3 config) cancelled; resubmitted with v4.
+- job 5 (reward v4) `liqiangx-innervoice-rl-1107-215712` JobId 792bf62a-6c71-457b-8541-bfe578b61b98 (queued; p5en pool full). p4 runs v4 as `results/rl/q32high_4B_engine_v4`.
