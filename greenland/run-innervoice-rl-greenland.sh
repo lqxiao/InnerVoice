@@ -5,8 +5,8 @@
 # Inputs come from public sources (no FSx dependency): HF liqiangx/InnerVoice-Qwen3-4B (merged weights for the engine,
 # research_ckpt/sxs.pt for the trainer), HF Qwen/Qwen3-4B (base), HF MathArena/aime_2025 (eval), rl_data/rl_pool.jsonl.gz (overlay).
 # Outputs: ${WORKSPACE_ROOT}/rl/{log.jsonl,eval.jsonl,ckpt_step*} on FSx (mirrored to S3), engine logs next to them.
-# Knobs (env): IV_ENGINE_ARGS IV_STEPS (480) IV_PROMPTS (32) IV_G (16) IV_MAXNEW (12000) IV_WQ (0.2) IV_WTRUNC (0.5) IV_KL (0.02) IV_KLR (0.05) IV_EVAL_EVERY (50)
-# Reward v3: R = correct*(1 + w_q*Q) - w_trunc*truncated (Q = disclosure quality in [0,1]), soft overlong, KL to the frozen SFT reference.
+# Knobs (env): IV_ENGINE_ARGS IV_STEPS (480) IV_PROMPTS (32) IV_G (16) IV_MAXNEW (12000) IV_WQ (0.2) IV_WTRUNC (0.5) IV_KL (0.02) IV_KLR (0.5) IV_WSHORTPEN (0.3) IV_EVAL_EVERY (50)
+# Reward v4 (v3 + unconditional flicker penalty 0.3*min(1,n_short/10), router KL 0.5; v3 flickered after step 70): R = correct*(1 + w_q*Q) - w_trunc*truncated (Q = disclosure quality in [0,1]), soft overlong, KL to the frozen SFT reference.
 set -eux -o pipefail
 IV=/opt/RufusGym/examples/innervoice
 WS=${WORKSPACE_ROOT:-/data/innervoice_ws}; mkdir -p "$WS/rl"
@@ -58,7 +58,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 --master_port=29621 lat
   --model Qwen/Qwen3-4B --ckpt $LIVE/research_ckpt --data "$WS/rl_pool.jsonl" --out "$WS/rl" --live $LIVE --engines "$URLS" \
   --steps ${IV_STEPS:-480} --prompts ${IV_PROMPTS:-32} --G ${IV_G:-16} --max_new ${IV_MAXNEW:-12000} --micro_bs 2 --label_bs 8 \
   --w_fco ${IV_WFCO:-0} --fco_ref 600 --w_unsup ${IV_WUNSUP:-0} --w_short ${IV_WSHORT:-0} \
-  --w_q ${IV_WQ:-0.2} --fco_ref_q 1200 --w_trunc ${IV_WTRUNC:-0.5} --soft_overlong --kl_beta ${IV_KL:-0.02} --kl_route_beta ${IV_KLR:-0.05} \
+  --w_q ${IV_WQ:-0.2} --fco_ref_q 1200 --w_trunc ${IV_WTRUNC:-0.5} --soft_overlong --kl_beta ${IV_KL:-0.02} --kl_route_beta ${IV_KLR:-0.5} --w_short_pen ${IV_WSHORTPEN:-0.3} \
   --eval_every ${IV_EVAL_EVERY:-50} --aime_data /data/aime25/data/train-00000-of-00001.parquet --aime_samples 4 --aime_max_new 12000 \
   2>&1 | tee "$WS/trainer.log"
 echo "=== DONE ==="; pkill -f "latent/vllm_serve[r].py" || true

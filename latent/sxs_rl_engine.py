@@ -102,6 +102,7 @@ def main():
     ap.add_argument("--w_unsup", type=float, default=0.0, help="penalty x fraction of public lines stating anchors not derived in think/prompt before them")
     ap.add_argument("--w_q", type=float, default=0.0, help="GATED reward: R = correct*(1 + w_q*Q) - w_trunc*truncated; Q = disclosure quality in [0,1] (unsupported lines, flicker, FCO)")
     ap.add_argument("--fco_ref_q", type=float, default=1200.0); ap.add_argument("--w_trunc", type=float, default=0.0, help="flat penalty for rollouts cut by --max_new (soft overlong punishment)")
+    ap.add_argument("--w_short_pen", type=float, default=0.0, help="unconditional flicker penalty: w * min(1, n_short/10)")
     ap.add_argument("--soft_overlong", action="store_true", help="keep truncated rollouts in the group (with --w_trunc) instead of masking them out")
     ap.add_argument("--kl_beta", type=float, default=0.0, help="KL(policy || SFT reference) on response tokens, k3 estimator, per-token mean")
     ap.add_argument("--kl_route_beta", type=float, default=0.0, help="KL on the router's disclosure decisions vs the SFT reference router")
@@ -121,7 +122,7 @@ def main():
     rows = [json.loads(l) for l in open(a.data)]; rng = random.Random(a.seed)
     aime_rows = load_aime(a.aime_data) if a.aime_data else []
     w = {"inter": a.w_inter, "prem": a.w_prem, "fmt": a.w_fmt, "fco": a.w_fco, "fco_ref": a.fco_ref, "len": a.w_len, "len_ref": a.len_ref, "unsup": a.w_unsup, "short": a.w_short,
-         "q": a.w_q, "fco_ref_q": a.fco_ref_q, "trunc": a.w_trunc}
+         "q": a.w_q, "fco_ref_q": a.fco_ref_q, "trunc": a.w_trunc, "short_pen": a.w_short_pen}
     lora_p, rest_p = model.param_groups(); params = model.trainable_parameters()
     use_kl = a.kl_beta > 0 or a.kl_route_beta > 0
     ref_store = [p.detach().clone() for p in params] if use_kl else None      # frozen SFT weights for the KL reference (~400 MB)

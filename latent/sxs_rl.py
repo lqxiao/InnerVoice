@@ -63,6 +63,8 @@ def score_rollout(ex, chunks, tm, w, ds=None, finished=True):
             # (soft overlong punishment) instead of being masked out.
             Q = ((1.0 - unsup_frac) + (1.0 - min(1.0, ds["n_short"] / 5.0)) + (1.0 - min(1.0, tm["FCO"] / w.get("fco_ref_q", 1200.0)))) / 3.0
             R = float(final_ok) * (1.0 + w["q"] * Q) - w.get("trunc", 0.0) * float(not finished)
+            # router flicker is never desired (SFT policy: ~0.5 short blocks/rollout): unconditional soft penalty, saturating at 10 blocks
+            R -= w.get("short_pen", 0.0) * min(1.0, ds["n_short"] / 10.0)
         else:
             R = (float(final_ok) - (w["fco"] * tm["FCO"] / w["fco_ref"] if final_ok else 0.0) - w["len"] * tm["n_tokens"] / w["len_ref"]
                  - w.get("unsup", 0.0) * unsup_frac - w.get("short", 0.0) * ds["n_short"])

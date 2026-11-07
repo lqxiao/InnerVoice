@@ -26,3 +26,7 @@ w_unsup 0.5 / w_short 0.05 / w_fco 0.05, eval every 50).
 - job 4 `liqiangx-innervoice-rl-1107-142214` JobId 310433e2-faf3-4c10-8869-6836580e6bdd: reward v3 (gated bounded Q bonus, soft
   overlong -0.5, KL 0.02 tokens / 0.05 router to the frozen SFT reference), unseen DeepMath pool, 32x16, 12k, 480 steps. p4 runs the
   same reward at 32x8 / 8k as `results/rl/q32high_4B_engine_v3` (step 1 KL = 0 sanity check passed; ~4.2 min/step).
+- p4 v3 (reward v3, 32x8, 8k): AIME 0.192 -> 0.308 (step 50, clean disclosure: FCO 1,214, 6.9 blocks) -> 0.283 (step 100) but router
+  flicker returned between steps 70-80 (short blocks 1.4 -> 20/rollout; AIME 166 blocks, 112 short). Q's flicker term saturates at 5
+  short blocks and the router KL at 0.05 was too weak. Reward v4 = v3 + unconditional flicker penalty 0.3*min(1, n_short/10) +
+  router KL 0.5. Job 4 (310433e2, still queued, v3 config) cancelled; resubmitted with v4.
