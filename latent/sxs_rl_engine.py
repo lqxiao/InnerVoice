@@ -12,7 +12,7 @@ import argparse, json, os, sys, time, random, statistics, threading, urllib.requ
 import torch, torch.distributed as dist
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from latent.sxs_model import SxSModel, SxSConfig
-from latent.sxs_rl import score_rollout, build_train_batch, public_chunks
+from latent.sxs_rl import score_rollout, build_train_batch, public_chunks, disclosure_stats
 from latent.sxs_eval import token_metrics
 from latent.sxs_eval_math import correct as math_correct, INSTR as AIME_INSTR, load_aime
 from latent.sxs_export import write_weights
@@ -99,6 +99,8 @@ def main():
     ap.add_argument("--lr_lora", type=float, default=1e-5); ap.add_argument("--lr_rest", type=float, default=5e-5); ap.add_argument("--w_route", type=float, default=1.0)
     ap.add_argument("--w_inter", type=float, default=0.5); ap.add_argument("--w_prem", type=float, default=1.0); ap.add_argument("--w_fmt", type=float, default=0.2)
     ap.add_argument("--w_fco", type=float, default=0.1); ap.add_argument("--fco_ref", type=float, default=600.0); ap.add_argument("--w_len", type=float, default=0.0); ap.add_argument("--len_ref", type=float, default=3000.0)
+    ap.add_argument("--w_unsup", type=float, default=0.0, help="penalty x fraction of public lines stating anchors not derived in think/prompt before them")
+    ap.add_argument("--w_short", type=float, default=0.0, help="penalty per speak block shorter than 4 tokens (router flicker)")
     ap.add_argument("--eval_every", type=int, default=50); ap.add_argument("--aime_data", default=""); ap.add_argument("--aime_samples", type=int, default=4); ap.add_argument("--aime_max_new", type=int, default=12000)
     ap.add_argument("--no_expert_ft", action="store_true"); ap.add_argument("--seed", type=int, default=0); ap.add_argument("--no_eval0", action="store_true")
     a = ap.parse_args()
@@ -113,7 +115,7 @@ def main():
     engines = Engines(a.engines.split(","), eos, model.eos_id) if is0 else None
     rows = [json.loads(l) for l in open(a.data)]; rng = random.Random(a.seed)
     aime_rows = load_aime(a.aime_data) if a.aime_data else []
-    w = {"inter": a.w_inter, "prem": a.w_prem, "fmt": a.w_fmt, "fco": a.w_fco, "fco_ref": a.fco_ref, "len": a.w_len, "len_ref": a.len_ref}
+    w = {"inter": a.w_inter, "prem": a.w_prem, "fmt": a.w_fmt, "fco": a.w_fco, "fco_ref": a.fco_ref, "len": a.w_len, "len_ref": a.len_ref, "unsup": a.w_unsup, "short": a.w_short}
     lora_p, rest_p = model.param_groups(); params = model.trainable_parameters()
     opt = torch.optim.AdamW([{"params": lora_p, "lr": a.lr_lora}, {"params": rest_p, "lr": a.lr_rest}], weight_decay=0.0)
     if is0: engines.wait_ready(); print(f"{len(engines.urls)} engines ready; trainer world={W}", flush=True)
@@ -138,9 +140,10 @@ def main():
             recs = []
             for i, (t, y) in enumerate(zip(toks, types)):
                 r = aime_rows[i // a.aime_samples]; pub = tok.decode([x for x, yy in zip(t, y) if yy == 0], skip_special_tokens=True); tm = token_metrics(y, t, tok, "math")
-                recs.append({"ok": math_correct(pub, r["answer"]), "finished": fin[i], **{k: tm[k] for k in ("FCO", "AIRW", "n_think", "n_speak_blocks", "n_tokens")}})
+                ds = disclosure_stats(tok, t, y, r["prompt"])
+                recs.append({"ok": math_correct(pub, r["answer"]), "finished": fin[i], "unsup_frac": ds["n_unsup"] / max(1, ds["n_judged"]), "n_short": ds["n_short"], **{k: tm[k] for k in ("FCO", "AIRW", "n_think", "n_speak_blocks", "n_tokens")}})
             N = len(recs); res = {"step": step, "aime_acc": sum(r["ok"] for r in recs) / N, "aime_unfinished": sum(not r["finished"] for r in recs) / N, "n": N,
-                                  **{f"aime_{k}": sum(r[k] for r in recs) / N for k in ("FCO", "AIRW", "n_think", "n_speak_blocks", "n_tokens")}, "t_eval": time.time() - t0}
+                                  **{f"aime_{k}": sum(r[k] for r in recs) / N for k in ("FCO", "AIRW", "n_think", "n_speak_blocks", "n_tokens", "unsup_frac", "n_short")}, "t_eval": time.time() - t0}
             elog.log(**res); print(f"[eval step {step}] " + json.dumps({k: (round(v, 3) if isinstance(v, float) else v) for k, v in res.items()}), flush=True)
         dist.barrier()
 
@@ -158,7 +161,8 @@ def main():
         if is0:
             Rs, infos = [], []
             for e, t, y in zip(exs_rep, toks, types):
-                ch = public_chunks(tok, t, y); tm = token_metrics(y, t, tok, e["source"]); R, info = score_rollout(e, ch, tm, w); Rs.append(R); infos.append(info)
+                ch = public_chunks(tok, t, y); tm = token_metrics(y, t, tok, e["source"]); ds = disclosure_stats(tok, t, y, e["prompt"])
+                R, info = score_rollout(e, ch, tm, w, ds); Rs.append(R); infos.append(info)
             R = torch.tensor(Rs).view(a.prompts, a.G); finished = torch.tensor(fin).view(a.prompts, a.G); valid = finished.float(); cnt = valid.sum(1, keepdim=True).clamp(min=1)
             mean = (R * valid).sum(1, keepdim=True) / cnt; var = (((R - mean) ** 2) * valid).sum(1, keepdim=True) / cnt
             adv = ((R - mean) / (var.sqrt() + 1e-6)) * valid; keep = (var.sqrt().squeeze(1) > 1e-6).repeat_interleave(a.G); adv = (adv.view(-1) * keep.float()).tolist()
@@ -187,7 +191,7 @@ def main():
             mi.update(step=step, R=float(R.mean()), groups_kept=int((adv.view(a.prompts, a.G).abs().sum(1) > 0).sum()), n_truncated=int((~finished).sum()), loss=loss_sum, gn=float(gn),
                       t_rollout=t_roll, t_label=t_label, t_train=t_train, t_sync=t_sync, mean_len=statistics.mean(len(t) for t in toks), p95_len=sorted(len(t) for t in toks)[int(0.95 * (len(toks) - 1))])
             log.log(**mi)
-            print(f"step {step}: R={mi['R']:.3f} acc={mi['final']:.3f} FCO={mi['FCO']:.0f} think={mi['n_think']:.0f} blocks={mi['blocks']:.2f} trunc={mi['n_truncated']} groups={mi['groups_kept']}/{a.prompts} "
+            print(f"step {step}: R={mi['R']:.3f} acc={mi['final']:.3f} FCO={mi['FCO']:.0f} think={mi['n_think']:.0f} blocks={mi['blocks']:.2f} unsup={mi.get('unsup_frac', 0):.2f} short={mi.get('n_short', 0):.1f} trunc={mi['n_truncated']} groups={mi['groups_kept']}/{a.prompts} "
                   f"| roll {t_roll:.0f}s label {t_label:.0f}s train {t_train:.0f}s sync {t_sync:.0f}s", flush=True)
         if step % a.eval_every == 0 or step == a.steps:
             if is0: model.save(os.path.join(a.out, f"ckpt_step{step}"))

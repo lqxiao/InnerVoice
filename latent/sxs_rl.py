@@ -20,12 +20,47 @@ def public_chunks(tok, toks, types):
     txt = tok.decode([t for t, y in zip(toks, types) if y == 0], skip_special_tokens=True)
     return [l.strip() for l in txt.split("\n") if l.strip()]
 
-def score_rollout(ex, chunks, tm, w):
+NUM_RE = re.compile(r"-?\d+(?:\.\d+)?|\\frac\{[^{}]+\}\{[^{}]+\}|\\sqrt\{[^{}]+\}")
+
+def anchors(text):
+    return set(m.group(0) for m in NUM_RE.finditer(text))
+
+def segments(tok, toks, types):
+    """Ordered (mode, text) blocks of a rollout, mode 1 = think."""
+    out, cur, mode = [], [], None
+    for t, y in zip(toks, types):
+        if mode is not None and y != mode: out.append((mode, tok.decode(cur, skip_special_tokens=True))); cur = []
+        cur.append(t); mode = y
+    if cur: out.append((mode, tok.decode(cur, skip_special_tokens=True)))
+    return out
+
+def disclosure_stats(tok, toks, types, prompt_text, short_len=4):
+    """Entailment proxy for 'speak only what you have derived': a public line is UNSUPPORTED if it states a numeric/LaTeX anchor that
+    appeared neither in the prompt nor in any think text (or earlier public line) before it. Also counts speak blocks shorter than
+    short_len tokens (router flicker). Returns dict(n_unsup, n_judged, n_short)."""
+    seen = anchors(prompt_text); n_unsup = n_judged = n_short = 0
+    pos = 0
+    for mode, text in segments(tok, toks, types):
+        if mode == 1: seen |= anchors(text); continue
+        if len(tok(text, add_special_tokens=False)["input_ids"]) < short_len: n_short += 1
+        for line in text.split("\n"):
+            a = anchors(line)
+            if not a: continue
+            n_judged += 1
+            if a - seen: n_unsup += 1
+            seen |= a
+    return {"n_unsup": n_unsup, "n_judged": n_judged, "n_short": n_short}
+
+def score_rollout(ex, chunks, tm, w, ds=None):
     src = ex["source"]
     if src == "deepmath":
         final_ok = math_correct("\n".join(chunks), ex["final_answer"]); oks = [final_ok]; prem = unp = 0; inter = []
-        R = float(final_ok) - (w["fco"] * tm["FCO"] / w["fco_ref"] if final_ok else 0.0) - w["len"] * tm["n_tokens"] / w["len_ref"]
-        return R, {"final": float(final_ok), "chunk_acc": float(final_ok), "prem": 0, "unp": 0, "FCO": tm["FCO"], "n_tok": tm["n_tokens"], "n_think": tm["n_think"], "blocks": tm["n_speak_blocks"]}
+        ds = ds or {"n_unsup": 0, "n_judged": 0, "n_short": 0}
+        unsup_frac = ds["n_unsup"] / max(1, ds["n_judged"])
+        R = (float(final_ok) - (w["fco"] * tm["FCO"] / w["fco_ref"] if final_ok else 0.0) - w["len"] * tm["n_tokens"] / w["len_ref"]
+             - w.get("unsup", 0.0) * unsup_frac - w.get("short", 0.0) * ds["n_short"])
+        return R, {"final": float(final_ok), "chunk_acc": float(final_ok), "prem": 0, "unp": 0, "FCO": tm["FCO"], "n_tok": tm["n_tokens"], "n_think": tm["n_think"], "blocks": tm["n_speak_blocks"],
+                   "unsup_frac": unsup_frac, "n_short": ds["n_short"]}
     if src == "kk":
         oks, final_ok = score_kk(chunks, ex["chunk_checks"])
         gold = {c["name"]: c["knight"] for c in ex["chunk_checks"]}
