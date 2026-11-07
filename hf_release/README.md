@@ -61,9 +61,10 @@ training set and are not directly comparable.
 | Qwen3-4B base, native thinking mode | 0.342 | 0.617 | 10,300 | 10,301 | 0.4 |
 | Qwen3-4B + Standard CoT SFT (think-then-speak, same 1,550 Qwen3-32B traces) | 0.083 | 0.008 | 1,074 | 1,047 | 1.6 |
 | Qwen3-4B InnerVoice SFT, research variant with e_think (not released) | 0.208 | 0.008 | 3,570 | 614 | 3.0 |
-| **This checkpoint**: Qwen3-4B InnerVoice SFT without e_think (vLLM decode) | THIS_ACC | THIS_UNF | THIS_THINK | THIS_FCO | THIS_BLOCKS |
+| **This checkpoint**: Qwen3-4B InnerVoice SFT without e_think (vLLM decode) | 0.158 | 0.058 | 3,094 | 1,205 | 3.7 |
 
-InnerVoice starts speaking after ~600 tokens (FCO) and emits ~3 public chunks per problem, while the think-then-speak baseline
+The released checkpoint and the e_think research variant differ by 5 points, within the +-8 pt noise of 30 problems x 4 samples.
+InnerVoice starts speaking after ~600-1,200 tokens (FCO) and emits ~3 public chunks per problem, while the think-then-speak baseline
 trained on identical data speaks only once at the end and loses most of the accuracy; the base model keeps its accuracy only because
 it may think for 10k+ tokens before saying anything (and still fails to finish 62% of the time within the budget).
 
