@@ -5,7 +5,7 @@
 # Inputs come from public sources (no FSx dependency): HF liqiangx/InnerVoice-Qwen3-4B (merged weights for the engine,
 # research_ckpt/sxs.pt for the trainer), HF Qwen/Qwen3-4B (base), HF MathArena/aime_2025 (eval), rl_data/rl_pool.jsonl.gz (overlay).
 # Outputs: ${WORKSPACE_ROOT}/rl/{log.jsonl,eval.jsonl,ckpt_step*} on FSx (mirrored to S3), engine logs next to them.
-# Knobs (env): IV_STEPS (480) IV_PROMPTS (32) IV_G (16) IV_MAXNEW (12000) IV_WFCO (0.05) IV_WUNSUP (0.5) IV_WSHORT (0.05) IV_EVAL_EVERY (50)
+# Knobs (env): IV_ENGINE_ARGS (e.g. --enforce_eager) IV_STEPS (480) IV_PROMPTS (32) IV_G (16) IV_MAXNEW (12000) IV_WFCO (0.05) IV_WUNSUP (0.5) IV_WSHORT (0.05) IV_EVAL_EVERY (50)
 set -eux
 IV=/opt/RufusGym/examples/innervoice
 WS=${WORKSPACE_ROOT:-/data/innervoice_ws}; mkdir -p "$WS/rl"
@@ -31,18 +31,24 @@ ls -la $LIVE $LIVE/research_ckpt /data/aime25/data
 gunzip -kf "$IV/rl_data/rl_pool.jsonl.gz"; wc -l "$IV/rl_data/rl_pool.jsonl"
 cp "$IV/rl_data/rl_pool.jsonl" "$WS/rl_pool.jsonl"
 
-echo "=== [C] rollout engines on GPUs 4-7 ==="
+echo "=== [C] rollout engines on GPUs 4-7 (sequential start; isolated compile caches; eager fallback) ==="
 cd "$IV"
 URLS=""
+start_engine() {  # i extra_args
+  local i=$1; shift; local g=$((4 + i)); local port=$((8001 + i))
+  mkdir -p /data/vllm_cache_$i /data/inductor_$i; : > "$WS/engine_$i.log"
+  CUDA_VISIBLE_DEVICES=$g VLLM_CACHE_ROOT=/data/vllm_cache_$i TORCHINDUCTOR_CACHE_DIR=/data/inductor_$i VLLM_LOGGING_LEVEL=WARNING \
+    nohup python3 latent/vllm_server.py --model $LIVE --port $port --max_model_len 13000 --max_num_seqs 160 ${IV_ENGINE_ARGS:-} "$@" >> "$WS/engine_$i.log" 2>&1 &
+  for _ in $(seq 1 120); do grep -q -E "SERVER_READY|Traceback" "$WS/engine_$i.log" && break; sleep 10; done
+  grep -q SERVER_READY "$WS/engine_$i.log"
+}
 for i in 0 1 2 3; do
-  g=$((4 + i)); port=$((8001 + i))
-  CUDA_VISIBLE_DEVICES=$g VLLM_LOGGING_LEVEL=WARNING nohup python3 latent/vllm_server.py --model $LIVE --port $port --max_model_len 13000 --max_num_seqs 160 > "$WS/engine_$i.log" 2>&1 &
-  URLS="${URLS:+$URLS,}http://127.0.0.1:$port"
-done
-for i in 0 1 2 3; do
-  for _ in $(seq 1 180); do grep -q -E "SERVER_READY|Traceback" "$WS/engine_$i.log" && break; sleep 10; done
-  grep -E "SERVER_READY|Traceback" "$WS/engine_$i.log" | tail -1
-  grep -q SERVER_READY "$WS/engine_$i.log" || { echo "engine $i failed"; tail -50 "$WS/engine_$i.log"; exit 1; }
+  if ! start_engine $i; then
+    echo "engine $i failed to start (compiled); retrying with --enforce_eager"; grep -n -i -m 5 rror "$WS/engine_$i.log" || true
+    pkill -f "vllm_server.py --model $LIVE --port $((8001 + i))" || true; sleep 5
+    start_engine $i --enforce_eager || { echo "engine $i failed twice"; tail -40 "$WS/engine_$i.log"; exit 1; }
+  fi
+  URLS="${URLS:+$URLS,}http://127.0.0.1:$((8001 + i))"; echo "engine $i ready"
 done
 nvidia-smi --query-gpu=index,memory.used --format=csv,noheader
 

@@ -11,3 +11,6 @@ inspect-job <id> --initiative-id SFAI-shared-p5en-eks --region us-west-2` (Midwa
 
 Jobs: 2026-11-07 `liqiangx-innervoice-rl-1107-060539` JobId 23a46a7a-bbde-4807-b415-66bace7a8751 (480 steps, 32x16, 12k cap,
 w_unsup 0.5 / w_short 0.05 / w_fco 0.05, eval every 50).
+- 2026-11-07 job 1 (23a46a7a) failed at engine start: 4 engines launched concurrently shared ~/.cache/vllm -> torch.compile artifact
+  corruption ("vLLM failed to compile the model"). Fix: sequential engine start, per-engine VLLM_CACHE_ROOT/TORCHINDUCTOR_CACHE_DIR,
+  retry with --enforce_eager. Resubmitted as `liqiangx-innervoice-rl-1107-061456` JobId 9eac7fb3-e1f1-45a6-9291-272496d8b209.
