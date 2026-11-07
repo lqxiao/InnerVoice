@@ -6,7 +6,7 @@
 # research_ckpt/sxs.pt for the trainer), HF Qwen/Qwen3-4B (base), HF MathArena/aime_2025 (eval), rl_data/rl_pool.jsonl.gz (overlay).
 # Outputs: ${WORKSPACE_ROOT}/rl/{log.jsonl,eval.jsonl,ckpt_step*} on FSx (mirrored to S3), engine logs next to them.
 # Knobs (env): IV_ENGINE_ARGS (e.g. --enforce_eager) IV_STEPS (480) IV_PROMPTS (32) IV_G (16) IV_MAXNEW (12000) IV_WFCO (0.05) IV_WUNSUP (0.5) IV_WSHORT (0.05) IV_EVAL_EVERY (50)
-set -eux
+set -eux -o pipefail
 IV=/opt/RufusGym/examples/innervoice
 WS=${WORKSPACE_ROOT:-/data/innervoice_ws}; mkdir -p "$WS/rl"
 export HF_HOME=/data/hf; mkdir -p /data/hf; unset HF_HUB_OFFLINE
