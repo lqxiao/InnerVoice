@@ -17,6 +17,22 @@ def aime_table():
     return "\n".join(out)
 AIME = aime_table()
 
+def engine_rl_table():
+    """AIME25 Average@4 trajectory of the engine-based 4B RL runs (results/rl/<run>/eval.jsonl, evaluated through the vLLM engines)."""
+    runs = [("q32high_4B_engine", "R1: correct + gated FCO bonus, SFT prompts, argmax routing"),
+            ("q32high_4B_engine_v3", "R3: gated Q bonus + KL(0.02 tok / 0.05 router), soft overlong, unseen pool, argmax routing"),
+            ("q32high_4B_engine_v4", "R4: R3 + flicker penalty 0.3, router KL 0.5"),
+            ("q32high_4B_engine_v5", "R5: R4 + hash-sampled routing, w_route 0.2")]
+    out = ["| run (reward) | step | AIME25 Avg@4 | unfinished | FCO | AIRW | think tok | speak blocks | short blocks | unsupported lines |", "|---|---|---|---|---|---|---|---|---|---|"]
+    for run, label in runs:
+        f = f"results/rl/{run}/eval.jsonl"
+        if not os.path.exists(f): continue
+        for i, l in enumerate(open(f)):
+            d = _json.loads(l); lab = label if i == 0 else ""
+            out.append(f"| {lab} | {d['step']} | {d['aime_acc']:.3f} | {d['aime_unfinished']:.3f} | {d['aime_FCO']:.0f} | {d['aime_AIRW']:.0f} | {d['aime_n_think']:.0f} | {d['aime_n_speak_blocks']:.1f} | {d.get('aime_n_short', float('nan')):.1f} | {d.get('aime_unsup_frac', float('nan')):.2f} |")
+    return "\n".join(out)
+ENGINE_RL = engine_rl_table()
+
 def teacher_table():
     rows = [("dm_", "DeepMath R1 solutions (dataset-provided; think median 1,237 words)", 11684),
             ("q32_", "Qwen3-32B via Bedrock, default effort (think median 374 words)", 2287),
@@ -211,6 +227,36 @@ policy, greedy, 150 test examples per set (same protocol as the SFT rows).
   the 1,550 SFT problems, i.e. the SFT prompt set is too easy for RL and the prompt pool should move to unseen DeepMath problems.
 - Next: longer runs (≥500 steps), ≥2 seeds, Average@4 evaluation, rollout budgets that do not truncate correct reasoning, and the
   voice-stage rewards (stall/TTFC in seconds with randomised per-token cost).
+
+## RL round 3 — engine rollouts, Qwen3-4B InnerVoice (Scenario B)
+
+Setup: start = `q32high_sxs_4B_noethink` SFT (same 1,550 Qwen3-32B-high traces as the e_think variant; e_think dropped so the policy
+runs in vLLM). Rollouts from 4 vLLM engines (T=1.0, 8k cap), 4 trainer ranks, 32 prompts x 8 rollouts per step, GRPO-style
+group-normalised advantages, policy gradient on token + disclosure-decision log-probs; AIME25 Average@4 (12k cap) every 50 steps
+through the same engines (n=120, ±8 pt). Rewards (R1..R5 below) and prompt pools evolved as failure modes appeared:
+R1 used the 1,550 SFT problems (too easy: 84% group accuracy -> the FCO bonus was the only in-group signal) and collapsed into
+"speak everything" (94 public blocks, FCO 21); a dense-penalty variant (R2: unsupported-anchor lines 0.5, short blocks 0.05, FCO, no KL,
+run on Greenland at 32x16) collapsed the other way (no think, one short paragraph; AIME 0.19 -> 0.00 by step 100). R3 made every shaping
+term a bounded bonus paid only on correct rollouts (R = correct·(1+0.2·Q), Q in [0,1] from unsupported lines / flicker / FCO), kept
+truncated rollouts with a -0.5 penalty instead of masking, added KL to a frozen SFT copy and switched to 8,918 unseen DeepMath problems
+(difficulty >= 5); it was clean at step 50 but word-level think/speak flicker appeared around step 70. R4 added an unconditional flicker
+penalty (0.3·min(1, short blocks/10)) and router KL 0.5: clean and best at step 50, flicker again by step 100. Root cause: the SFT
+router is near-deterministic (0.4% of positions with 0.02 < p < 0.98), so argmax routing + REINFORCE on the taken decision has no
+exploration and negative advantages push uncertain logits across 0. R5 samples the disclosure decision in the engine with a
+hash-reproducible u(token, position) (trainer recovers identical labels: 882/882 on the equivalence test) and lowers the decision
+gradient weight to 0.2; it is the first design with no flicker through step 100.
+
+{ENGINE_RL}
+
+- Best clean checkpoint so far: R4 step 50 (0.333, 17.5% unfinished, FCO 1,586, 4.4 blocks) — vs the SFT start 0.14-0.19 (five step-0
+  evaluations of the same checkpoint spread 0.142-0.192, which is the ±8 pt noise in action) and the Qwen3-4B base in thinking mode
+  0.342 (62% unfinished at 12k, FCO 10,301). R5 trades a few points for stability (0.275 / 0.242 at steps 50 / 100, 6.7% unfinished).
+- Accuracy gains come with longer private reasoning (think 2.8k -> 4.8-6.8k tokens at steps 50-100), as in the paper's RL stage
+  (AIRW 4,035 -> 8,519). The paper's numbers (Base 66.3, SxS SFT 38.3, SxS RL 80.0 on Qwen3-4B at a 32k budget, 480+120 steps x 512
+  rollouts) are not directly comparable to our 12k-budget, 50-100-step runs.
+- Gradient-checkpointing bug found during R5: `forward_train` cleared the teacher-forced route before backward, so the last layer's
+  recompute used argmax routing (wrong expert on the ~1% label-disagreeing positions). Fixed 2026-11-08; all 4B SFT runs
+  (trained with --grad_ckpt) carry this small bias and may be re-run.
 
 ## Reading of the results
 - **Interleaving works mechanically and cuts waiting.** On K&K the InnerVoice 1.7B model emits 2.7 public blocks per puzzle with AIRW 108

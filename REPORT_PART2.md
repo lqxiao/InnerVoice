@@ -1,6 +1,6 @@
 # Part 2: InnerVoice — token-level disclosure routing with a two-expert last layer (SFT results under the SxS evaluation protocol)
 
-Generated 2026-11-07. All planned SFT runs and evaluations are complete.
+Generated 2026-11-08. All planned SFT runs and evaluations are complete.
 
 ## Summary
 - **InnerVoice** = Qwen3 + LoRA, last-layer FFN -> inner (think) / outer (answer) experts chosen per token by a disclosure gate; think
@@ -279,6 +279,48 @@ policy, greedy, 150 test examples per set (same protocol as the SFT rows).
   the 1,550 SFT problems, i.e. the SFT prompt set is too easy for RL and the prompt pool should move to unseen DeepMath problems.
 - Next: longer runs (≥500 steps), ≥2 seeds, Average@4 evaluation, rollout budgets that do not truncate correct reasoning, and the
   voice-stage rewards (stall/TTFC in seconds with randomised per-token cost).
+
+## RL round 3 — engine rollouts, Qwen3-4B InnerVoice (Scenario B)
+
+Setup: start = `q32high_sxs_4B_noethink` SFT (same 1,550 Qwen3-32B-high traces as the e_think variant; e_think dropped so the policy
+runs in vLLM). Rollouts from 4 vLLM engines (T=1.0, 8k cap), 4 trainer ranks, 32 prompts x 8 rollouts per step, GRPO-style
+group-normalised advantages, policy gradient on token + disclosure-decision log-probs; AIME25 Average@4 (12k cap) every 50 steps
+through the same engines (n=120, ±8 pt). Rewards (R1..R5 below) and prompt pools evolved as failure modes appeared:
+R1 used the 1,550 SFT problems (too easy: 84% group accuracy -> the FCO bonus was the only in-group signal) and collapsed into
+"speak everything" (94 public blocks, FCO 21); a dense-penalty variant (R2: unsupported-anchor lines 0.5, short blocks 0.05, FCO, no KL,
+run on Greenland at 32x16) collapsed the other way (no think, one short paragraph; AIME 0.19 -> 0.00 by step 100). R3 made every shaping
+term a bounded bonus paid only on correct rollouts (R = correct·(1+0.2·Q), Q in [0,1] from unsupported lines / flicker / FCO), kept
+truncated rollouts with a -0.5 penalty instead of masking, added KL to a frozen SFT copy and switched to 8,918 unseen DeepMath problems
+(difficulty >= 5); it was clean at step 50 but word-level think/speak flicker appeared around step 70. R4 added an unconditional flicker
+penalty (0.3·min(1, short blocks/10)) and router KL 0.5: clean and best at step 50, flicker again by step 100. Root cause: the SFT
+router is near-deterministic (0.4% of positions with 0.02 < p < 0.98), so argmax routing + REINFORCE on the taken decision has no
+exploration and negative advantages push uncertain logits across 0. R5 samples the disclosure decision in the engine with a
+hash-reproducible u(token, position) (trainer recovers identical labels: 882/882 on the equivalence test) and lowers the decision
+gradient weight to 0.2; it is the first design with no flicker through step 100.
+
+| run (reward) | step | AIME25 Avg@4 | unfinished | FCO | AIRW | think tok | speak blocks | short blocks | unsupported lines |
+|---|---|---|---|---|---|---|---|---|---|
+| R1: correct + gated FCO bonus, SFT prompts, argmax routing | 0 | 0.158 | 0.058 | 1205 | 1337 | 3094 | 3.7 | nan | nan |
+|  | 50 | 0.217 | 0.217 | 101 | 415 | 4622 | 16.6 | nan | nan |
+|  | 100 | 0.292 | 0.517 | 21 | 152 | 5552 | 93.8 | nan | nan |
+| R3: gated Q bonus + KL(0.02 tok / 0.05 router), soft overlong, unseen pool, argmax routing | 0 | 0.192 | 0.033 | 1015 | 942 | 2777 | 3.9 | 0.5 | 0.57 |
+|  | 50 | 0.308 | 0.258 | 1214 | 1560 | 6829 | 6.8 | 1.7 | 0.36 |
+|  | 100 | 0.283 | 0.133 | 351 | 266 | 4267 | 165.7 | 111.8 | 0.31 |
+| R4: R3 + flicker penalty 0.3, router KL 0.5 | 0 | 0.150 | 0.050 | 1194 | 941 | 2885 | 4.0 | 0.7 | 0.53 |
+|  | 50 | 0.333 | 0.175 | 1586 | 1966 | 6026 | 4.4 | 1.0 | 0.38 |
+|  | 100 | 0.200 | 0.075 | 236 | 319 | 3175 | 104.1 | 78.1 | 0.37 |
+| R5: R4 + hash-sampled routing, w_route 0.2 | 50 | 0.275 | 0.067 | 2040 | 814 | 4922 | 7.2 | 3.5 | 0.38 |
+|  | 100 | 0.242 | 0.067 | 893 | 911 | 4766 | 6.9 | 2.9 | 0.42 |
+
+- Best clean checkpoint so far: R4 step 50 (0.333, 17.5% unfinished, FCO 1,586, 4.4 blocks) — vs the SFT start 0.14-0.19 (five step-0
+  evaluations of the same checkpoint spread 0.142-0.192, which is the ±8 pt noise in action) and the Qwen3-4B base in thinking mode
+  0.342 (62% unfinished at 12k, FCO 10,301). R5 trades a few points for stability (0.275 / 0.242 at steps 50 / 100, 6.7% unfinished).
+- Accuracy gains come with longer private reasoning (think 2.8k -> 4.8-6.8k tokens at steps 50-100), as in the paper's RL stage
+  (AIRW 4,035 -> 8,519). The paper's numbers (Base 66.3, SxS SFT 38.3, SxS RL 80.0 on Qwen3-4B at a 32k budget, 480+120 steps x 512
+  rollouts) are not directly comparable to our 12k-budget, 50-100-step runs.
+- Gradient-checkpointing bug found during R5: `forward_train` cleared the teacher-forced route before backward, so the last layer's
+  recompute used argmax routing (wrong expert on the ~1% label-disagreeing positions). Fixed 2026-11-08; all 4B SFT runs
+  (trained with --grad_ckpt) carry this small bias and may be re-run.
 
 ## Reading of the results
 - **Interleaving works mechanically and cuts waiting.** On K&K the InnerVoice 1.7B model emits 2.7 public blocks per puzzle with AIRW 108
