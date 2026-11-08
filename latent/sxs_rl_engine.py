@@ -109,6 +109,7 @@ def main():
     ap.add_argument("--w_short", type=float, default=0.0, help="penalty per speak block shorter than 4 tokens (router flicker)")
     ap.add_argument("--eval_every", type=int, default=50); ap.add_argument("--aime_data", default=""); ap.add_argument("--aime_samples", type=int, default=4); ap.add_argument("--aime_max_new", type=int, default=12000)
     ap.add_argument("--no_expert_ft", action="store_true"); ap.add_argument("--seed", type=int, default=0); ap.add_argument("--no_eval0", action="store_true")
+    ap.add_argument("--route_sample", action="store_true", help="engines use hash-sampled routing (export with --route_sample); label pass replicates it")
     a = ap.parse_args()
     dist.init_process_group("nccl"); rank = dist.get_rank(); W = dist.get_world_size(); local = int(os.environ.get("LOCAL_RANK", rank))
     torch.cuda.set_device(local); dev = f"cuda:{local}"; is0 = rank == 0
@@ -116,7 +117,7 @@ def main():
         os.makedirs(a.out, exist_ok=True); json.dump(vars(a), open(os.path.join(a.out, "args.json"), "w"), indent=1)
         log = JsonLogger(os.path.join(a.out, "log.jsonl")); elog = JsonLogger(os.path.join(a.out, "eval.jsonl"))
     set_seed(a.seed)
-    model = SxSModel(SxSConfig(model_name=a.model, expert_full_ft=not a.no_expert_ft, use_e_think=False, grad_ckpt=True), device=dev); model.load(a.ckpt); tok = model.tok
+    model = SxSModel(SxSConfig(model_name=a.model, expert_full_ft=not a.no_expert_ft, use_e_think=False, grad_ckpt=True, route_sample=a.route_sample), device=dev); model.load(a.ckpt); tok = model.tok
     eos = [model.eos_id, tok.eos_token_id]
     engines = Engines(a.engines.split(","), eos, model.eos_id) if is0 else None
     rows = [json.loads(l) for l in open(a.data)]; rng = random.Random(a.seed)

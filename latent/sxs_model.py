@@ -14,6 +14,15 @@ from peft import LoraConfig, get_peft_model
 N_BUF = 4  # remaining audio s /10, think tokens so far in this block /64, chunks emitted /8, per-token think cost s
 
 
+def route_hash_u(ids, pos):
+    """Deterministic pseudo-random u in [0,1) from (token id, position) — integer hashing only, so the inference engine and the
+    trainer recover identical values on any hardware. Used for reproducible *sampled* routing: route = sigmoid(logit) > u."""
+    a = (pos.long() * 1000003 + ids.long() * 7919 + 12345) % 4294967296
+    h = (a * 40503) % 4294967296
+    h = ((h ^ (h >> 15)) * 40503) % 4294967296
+    return h.float() / 4294967296.0
+
+
 class TwoExpertMLP(nn.Module):
     def __init__(self, mlp: nn.Module, d: int, router_hidden: int = 256, full_ft: bool = True):
         super().__init__()
@@ -28,6 +37,8 @@ class TwoExpertMLP(nn.Module):
         self.buf: Optional[torch.Tensor] = None        # (B,L,N_BUF)
         self.router_logits: Optional[torch.Tensor] = None
         self.sample_route: bool = False                # RL exploration: sample the mode from sigmoid(logit) instead of argmax
+        self.sample_hash: bool = False                 # reproducible sampling: route = sigmoid(logit) > route_hash_u(token, position)
+        self.aux = None                                # (ids, pos), each (B,L), set by the caller before the forward when sample_hash
         self.last_route: Optional[torch.Tensor] = None # (B,L) bool route actually used in the last forward
 
     def forward(self, x):
@@ -39,6 +50,9 @@ class TwoExpertMLP(nn.Module):
             route = self.route
         elif self.sample_route:
             route = torch.bernoulli(torch.sigmoid(logits.detach())).bool()
+        elif self.sample_hash:
+            ids, pos = self.aux
+            route = torch.sigmoid(logits.detach()) > route_hash_u(ids, pos).to(logits.device)
         else:
             route = logits > 0
         self.last_route = route
@@ -55,6 +69,7 @@ class SxSConfig:
     router_hidden: int = 256
     use_e_think: bool = True
     grad_ckpt: bool = False
+    route_sample: bool = False      # hash-sampled routing at decode time (engine + trainer label pass); False = argmax
 
 
 class SxSModel(nn.Module):
@@ -81,7 +96,7 @@ class SxSModel(nn.Module):
             if hasattr(base, "enable_input_require_grads"): base.enable_input_require_grads()
         last = layers[-1]
         last.mlp = TwoExpertMLP(last.mlp, d, cfg.router_hidden, full_ft=cfg.expert_full_ft)
-        self.moe = last.mlp
+        self.moe = last.mlp; self.moe.sample_hash = cfg.route_sample
         self.e_think = nn.Parameter(torch.randn(d) * 0.02)
         self.to(device); self.device = device
         self.eos_id = self.tok.convert_tokens_to_ids("<|im_end|>")
@@ -250,7 +265,7 @@ class SxSModel(nn.Module):
         overrides, so no recompute is ever needed). Left-padded prompts. Returns per-sequence token ids and types (1 = think)."""
         B, L = prompt_ids.shape; dev = prompt_ids.device
         mask = prompt_mask.clone(); pos = (mask.long().cumsum(-1) - 1).clamp(min=0)
-        self.moe.route = None; self.moe.buf = None; self.moe.sample_route = sample_router
+        self.moe.route = None; self.moe.buf = None; self.moe.sample_route = sample_router; self.moe.aux = (prompt_ids, pos)
         out = self.lm(inputs_embeds=self.inputs_embeds(prompt_ids, torch.zeros_like(prompt_ids)), attention_mask=mask, position_ids=pos, use_cache=True, return_dict=True)
         cache = out.past_key_values; cur = mask.long().sum(-1)
         router_logit = self.moe.router_logits[:, -1]; last_logits = out.logits[:, -1]
@@ -265,12 +280,12 @@ class SxSModel(nn.Module):
                 if not dl[b]: toks[b].append(nl[b]); types[b].append(int(ml[b]))
             done = done | (nxt == self.eos_id) | (nxt == self.tok.eos_token_id)
             if done.all(): break
-            mask = torch.cat([mask, (~done).long()[:, None]], 1)
+            mask = torch.cat([mask, (~done).long()[:, None]], 1); self.moe.aux = (nxt[:, None], cur[:, None])
             out = self.lm(inputs_embeds=self.inputs_embeds(nxt[:, None], mode_think.long()[:, None]), attention_mask=mask, past_key_values=cache,
                           position_ids=cur[:, None], use_cache=True, return_dict=True)
             cache = out.past_key_values; cur = cur + 1
             router_logit = self.moe.router_logits[:, -1]; last_logits = out.logits[:, -1]
-        self.moe.sample_route = False
+        self.moe.sample_route = False; self.moe.aux = None
         return toks, types
 
     @torch.no_grad()
@@ -280,9 +295,10 @@ class SxSModel(nn.Module):
         requires use_e_think=False (the input embedding must not depend on the labels)."""
         assert not self.cfg.use_e_think, "infer_route needs a --no_e_think model"
         pos = (mask.long().cumsum(-1) - 1).clamp(min=0)
-        self.moe.route = None; self.moe.buf = None; self.moe.sample_route = False
+        self.moe.route = None; self.moe.buf = None; self.moe.sample_route = False; self.moe.aux = (ids, pos)
         body = (self.lm.get_base_model() if hasattr(self.lm, "get_base_model") else self.lm).model
         body(inputs_embeds=self.inputs_embeds(ids, torch.zeros_like(ids)), attention_mask=mask, position_ids=pos, use_cache=False)
+        self.moe.aux = None
         return self.moe.last_route
 
     def merge_lora(self):

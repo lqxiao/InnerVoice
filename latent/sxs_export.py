@@ -48,7 +48,7 @@ def write_config(model: SxSModel, out_dir: str):
     from transformers import AutoConfig, GenerationConfig
     os.makedirs(out_dir, exist_ok=True)
     cfg = AutoConfig.from_pretrained(model.cfg.model_name)
-    cfg.architectures = [ARCH]; cfg.router_hidden = model.cfg.router_hidden
+    cfg.architectures = [ARCH]; cfg.router_hidden = model.cfg.router_hidden; cfg.router_sample = bool(model.cfg.route_sample)
     cfg.auto_map = {"AutoModelForCausalLM": "modeling_innervoice.InnerVoiceQwen3ForCausalLM"}   # transformers remote code
     cfg.save_pretrained(out_dir); model.tok.save_pretrained(out_dir)
     import shutil; shutil.copy(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "hf_release", "modeling_innervoice.py"), out_dir)
@@ -65,7 +65,8 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="Qwen/Qwen3-4B"); ap.add_argument("--ckpt", required=True); ap.add_argument("--out", required=True)
     ap.add_argument("--no_expert_ft", action="store_true"); ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    ap.add_argument("--route_sample", action="store_true", help="engine samples the disclosure decision (hash-reproducible) instead of argmax")
     a = ap.parse_args()
-    m = SxSModel(SxSConfig(model_name=a.model, expert_full_ft=not a.no_expert_ft, use_e_think=False), device=a.device); m.load(a.ckpt)
+    m = SxSModel(SxSConfig(model_name=a.model, expert_full_ft=not a.no_expert_ft, use_e_think=False, route_sample=a.route_sample), device=a.device); m.load(a.ckpt)
     t0 = time.time(); f = export(m, a.out)
     print(f"wrote {f} ({os.path.getsize(f) / 1e9:.2f} GB) in {time.time() - t0:.1f}s")

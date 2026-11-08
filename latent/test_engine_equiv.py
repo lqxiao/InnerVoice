@@ -10,9 +10,10 @@ from latent.sxs_rl_engine import Engines, label_types
 ap = argparse.ArgumentParser()
 ap.add_argument("--model", default="Qwen/Qwen3-1.7B"); ap.add_argument("--ckpt", required=True); ap.add_argument("--url", default="http://127.0.0.1:8001")
 ap.add_argument("--data", default="data_sxs/sxs_test.jsonl"); ap.add_argument("--n", type=int, default=8); ap.add_argument("--max_new", type=int, default=300)
+ap.add_argument("--route_sample", action="store_true")
 a = ap.parse_args()
 dev = "cuda"
-m = SxSModel(SxSConfig(model_name=a.model, use_e_think=False), device=dev); m.load(a.ckpt); m.eval(); tok = m.tok
+m = SxSModel(SxSConfig(model_name=a.model, use_e_think=False, route_sample=a.route_sample), device=dev); m.load(a.ckpt); m.eval(); tok = m.tok
 rows = [json.loads(l) for l in open(a.data)][:a.n]
 p_ids = [tok(tok.apply_chat_template([{"role": "user", "content": r["prompt"]}], tokenize=False, add_generation_prompt=True, enable_thinking=False), add_special_tokens=False)["input_ids"] for r in rows]
 L = max(len(x) for x in p_ids); ids = torch.full((a.n, L), tok.pad_token_id); mask = torch.zeros(a.n, L, dtype=torch.long)

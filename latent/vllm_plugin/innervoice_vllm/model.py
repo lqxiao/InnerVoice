@@ -14,9 +14,19 @@ from vllm.model_executor.models.qwen3 import Qwen3ForCausalLM, Qwen3MLP
 N_BUF = 4
 
 
+def route_hash_u(ids, pos):
+    """Must match latent/sxs_model.py::route_hash_u exactly (integer hashing -> identical on any hardware)."""
+    a = (pos.long() * 1000003 + ids.long() * 7919 + 12345) % 4294967296
+    h = (a * 40503) % 4294967296
+    h = ((h ^ (h >> 15)) * 40503) % 4294967296
+    return h.float() / 4294967296.0
+
+
 class TwoExpertMLP(nn.Module):
-    def __init__(self, hidden_size, intermediate_size, hidden_act, quant_config, prefix, router_hidden):
+    def __init__(self, hidden_size, intermediate_size, hidden_act, quant_config, prefix, router_hidden, router_sample=False):
         super().__init__()
+        self.router_sample = router_sample
+        self.aux = None   # (input_ids, positions) flattened [num_tokens], set by InnerVoiceQwen3ForCausalLM.forward
         self.answer = Qwen3MLP(hidden_size, intermediate_size, hidden_act, quant_config=quant_config, prefix=f"{prefix}.answer")
         self.think = Qwen3MLP(hidden_size, intermediate_size, hidden_act, quant_config=quant_config, prefix=f"{prefix}.think")
         self.router = nn.Sequential(nn.Linear(hidden_size + N_BUF, router_hidden), nn.GELU(), nn.Linear(router_hidden, 1)).float()
@@ -24,7 +34,11 @@ class TwoExpertMLP(nn.Module):
     def forward(self, x):
         xf = x.float()
         logits = self.router(torch.cat([xf, xf.new_zeros(*xf.shape[:-1], N_BUF)], -1)).squeeze(-1)
-        route = logits > 0                                   # True -> think expert produces the next token
+        if self.router_sample:
+            ids, pos = self.aux
+            route = torch.sigmoid(logits) > route_hash_u(ids, pos)    # reproducible sampled disclosure decision
+        else:
+            route = logits > 0                               # argmax: True -> think expert produces the next token
         return torch.where(route[..., None], self.think(x), self.answer(x))
 
 
@@ -35,4 +49,9 @@ class InnerVoiceQwen3ForCausalLM(Qwen3ForCausalLM):
         layers = self.model.layers
         n = len(layers) - 1
         layers[n].mlp = TwoExpertMLP(cfg.hidden_size, cfg.intermediate_size, cfg.hidden_act, vllm_config.quant_config,
-                                     prefix=f"{prefix}model.layers.{n}.mlp", router_hidden=getattr(cfg, "router_hidden", 256))
+                                     prefix=f"{prefix}model.layers.{n}.mlp", router_hidden=getattr(cfg, "router_hidden", 256),
+                                     router_sample=bool(getattr(cfg, "router_sample", False)))
+
+    def forward(self, input_ids, positions, *args, **kwargs):
+        self.model.layers[-1].mlp.aux = (input_ids, positions)
+        return super().forward(input_ids, positions, *args, **kwargs)
