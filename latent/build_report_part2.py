@@ -27,7 +27,10 @@ def engine_rl_table():
     for run, label in runs:
         f = f"results/rl/{run}/eval.jsonl"
         if not os.path.exists(f): continue
-        for i, l in enumerate(open(f)):
+        lines = open(f).read().splitlines()
+        f0 = f"results/rl/{run}_crashed/eval.jsonl"   # step-0 eval of a first launch that crashed before step 1 (same ckpt/config, relaunched with --no_eval0)
+        if os.path.exists(f0): lines = [l for l in open(f0).read().splitlines() if '"step": 0' in l] + lines
+        for i, l in enumerate(lines):
             d = _json.loads(l); lab = label if i == 0 else ""
             out.append(f"| {lab} | {d['step']} | {d['aime_acc']:.3f} | {d['aime_unfinished']:.3f} | {d['aime_FCO']:.0f} | {d['aime_AIRW']:.0f} | {d['aime_n_think']:.0f} | {d['aime_n_speak_blocks']:.1f} | {d.get('aime_n_short', float('nan')):.1f} | {d.get('aime_unsup_frac', float('nan')):.2f} |")
     return "\n".join(out)
