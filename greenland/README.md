@@ -43,3 +43,5 @@ w_unsup 0.5 / w_short 0.05 / w_fco 0.05, eval every 50).
   (route kept until the caller's backward). NOTE: this also affected every SFT run trained with --grad_ckpt (4B runs) at the
   ~1% of positions where the router disagreed with the labels. Resubmitted as job 7 `liqiangx-innervoice-rl-1108-055927`
   JobId a5bd2f22-50f3-4415-870b-d72d21d09566.
+- p4 v5 (sampled routing, w_route 0.2, 32x8/8k) step 50: AIME 0.275 (step 0 with sampling 0.142), unfinished 0.067, FCO 2,040,
+  7.3 blocks, 3.5 short blocks (baseline 2.4), think 4,922. Training: short blocks 3.8 -> 1.2, router KL ~0, no flicker. Clean.
