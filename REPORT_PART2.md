@@ -311,6 +311,7 @@ gradient weight to 0.2; it is the first design with no flicker through step 100.
 |  | 100 | 0.200 | 0.075 | 236 | 319 | 3175 | 104.1 | 78.1 | 0.37 |
 | R5: R4 + hash-sampled routing, w_route 0.2 | 50 | 0.275 | 0.067 | 2040 | 814 | 4922 | 7.2 | 3.5 | 0.38 |
 |  | 100 | 0.242 | 0.067 | 893 | 911 | 4766 | 6.9 | 2.9 | 0.42 |
+|  | 150 | 0.283 | 0.167 | 495 | 709 | 5166 | 8.7 | 3.8 | 0.41 |
 
 - Best clean checkpoint so far: R4 step 50 (0.333, 17.5% unfinished, FCO 1,586, 4.4 blocks) — vs the SFT start 0.14-0.19 (five step-0
   evaluations of the same checkpoint spread 0.142-0.192, which is the ±8 pt noise in action) and the Qwen3-4B base in thinking mode
