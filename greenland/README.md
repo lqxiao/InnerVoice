@@ -37,3 +37,9 @@ w_unsup 0.5 / w_short 0.05 / w_fco 0.05, eval every 50).
   and negative advantages push uncertain logits across 0 -> word-level oscillation. v5 = hash-reproducible sampled routing in the
   engine (latent/sxs_model.py::route_hash_u, engine == HF labels 882/882) + w_route 0.2 (+ v4 penalties/KL).
 - job 6 (reward v5) `liqiangx-innervoice-rl-1108-054647` JobId e74e3ff3-23ad-472c-8d00-d0fb901cfc44; p4 runs v5 as `results/rl/q32high_4B_engine_v5`.
+- job 6 (e74e3ff3) cancelled before start: the packed code had a bug exposed by sampled routing — `forward_train` cleared
+  `moe.route` right after the forward, so under gradient checkpointing the last layer's recompute during backward used argmax/hash
+  routing instead of the teacher-forced labels (wrong expert on label-disagreeing positions; crash with sampled routing). Fixed
+  (route kept until the caller's backward). NOTE: this also affected every SFT run trained with --grad_ckpt (4B runs) at the
+  ~1% of positions where the router disagreed with the labels. Resubmitted as job 7 `liqiangx-innervoice-rl-1108-055927`
+  JobId a5bd2f22-50f3-4415-870b-d72d21d09566.

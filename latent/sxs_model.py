@@ -128,7 +128,9 @@ class SxSModel(nn.Module):
         pos = (mask.long().cumsum(-1) - 1).clamp(min=0)
         self.moe.route = route_label.bool(); self.moe.buf = buf
         out = self.lm(inputs_embeds=self.inputs_embeds(ids, is_think), attention_mask=mask, position_ids=pos, use_cache=False, return_dict=True)
-        self.moe.route = None; self.moe.buf = None
+        # NOTE: keep self.moe.route = route_label until the caller's backward has run. With gradient checkpointing the last layer is
+        # re-executed during backward and must see the same teacher-forced route (clearing it here made the recompute fall back to
+        # argmax / hash routing: wrong expert on label-disagreeing positions, and a crash when aux is unset). Decode paths reset it.
         logits = out.logits[:, :-1].float(); tgt = ids[:, 1:]; lm_ = loss_mask[:, 1:].float()
         ce = F.cross_entropy(logits.reshape(-1, logits.shape[-1]), tgt.reshape(-1), reduction="none").view(B, L - 1)
         w = lm_ * torch.where(is_think[:, 1:].bool(), torch.full_like(lm_, think_weight), torch.ones_like(lm_))
