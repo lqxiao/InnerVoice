@@ -45,3 +45,6 @@ w_unsup 0.5 / w_short 0.05 / w_fco 0.05, eval every 50).
   JobId a5bd2f22-50f3-4415-870b-d72d21d09566.
 - p4 v5 (sampled routing, w_route 0.2, 32x8/8k) step 50: AIME 0.275 (step 0 with sampling 0.142), unfinished 0.067, FCO 2,040,
   7.3 blocks, 3.5 short blocks (baseline 2.4), think 4,922. Training: short blocks 3.8 -> 1.2, router KL ~0, no flicker. Clean.
+- job 7 (a5bd2f22, reward v5, 32x16/12k): step 0 AIME 0.183 -> step 50 0.317 (unfinished 0.19, FCO 3,666, 9.3 blocks, 6.2 short
+  blocks, think 6,525); training clean at step 89 (short blocks 1-2/rollout, ~5 min/step). p4 v5 (32x8/8k): 0.142 -> 0.275 -> 0.242
+  (steps 0/50/100), 6.7% unfinished, no flicker through step 100.
