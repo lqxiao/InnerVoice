@@ -31,3 +31,9 @@ w_unsup 0.5 / w_short 0.05 / w_fco 0.05, eval every 50).
   short blocks and the router KL at 0.05 was too weak. Reward v4 = v3 + unconditional flicker penalty 0.3*min(1, n_short/10) +
   router KL 0.5. Job 4 (310433e2, still queued, v3 config) cancelled; resubmitted with v4.
 - job 5 (reward v4) `liqiangx-innervoice-rl-1107-215712` JobId 792bf62a-6c71-457b-8541-bfe578b61b98 (queued; p5en pool full). p4 runs v4 as `results/rl/q32high_4B_engine_v4`.
+- job 5 (792bf62a, reward v4, 32x16/12k): step 50 AIME 0.317 (from 0.183) but 168 public blocks / 120 short blocks per sample = flicker;
+  cancelled at step 63. p4 v4 (32x8/8k): 0.150 -> 0.333 (step 50, clean) -> 0.200 (step 100, 104 blocks). Diagnosis: argmax routing +
+  REINFORCE on the taken decision; the SFT router is near-deterministic (0.4% of positions with 0.02<p<0.98) so there is no exploration
+  and negative advantages push uncertain logits across 0 -> word-level oscillation. v5 = hash-reproducible sampled routing in the
+  engine (latent/sxs_model.py::route_hash_u, engine == HF labels 882/882) + w_route 0.2 (+ v4 penalties/KL).
+- job 6 (reward v5) `liqiangx-innervoice-rl-1108-054647` JobId e74e3ff3-23ad-472c-8d00-d0fb901cfc44; p4 runs v5 as `results/rl/q32high_4B_engine_v5`.
