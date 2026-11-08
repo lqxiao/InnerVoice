@@ -48,3 +48,6 @@ w_unsup 0.5 / w_short 0.05 / w_fco 0.05, eval every 50).
 - job 7 (a5bd2f22, reward v5, 32x16/12k): step 0 AIME 0.183 -> step 50 0.317 (unfinished 0.19, FCO 3,666, 9.3 blocks, 6.2 short
   blocks, think 6,525); training clean at step 89 (short blocks 1-2/rollout, ~5 min/step). p4 v5 (32x8/8k): 0.142 -> 0.275 -> 0.242
   (steps 0/50/100), 6.7% unfinished, no flicker through step 100.
+- job 7 evals (AIME25 Avg@4, n=120): step 0 0.183 -> 50 0.317 -> 100 0.317 -> 150 **0.367** (unfinished 0.25, FCO 715, 11.8 blocks,
+  7.2 short, think 6,988); training clean at step 151. Eval rows copied to results/rl/gl_job7_v5_32x16/eval.jsonl (via exec; the
+  S3 mirror lags open files).

@@ -22,7 +22,8 @@ def engine_rl_table():
     runs = [("q32high_4B_engine", "R1: correct + gated FCO bonus, SFT prompts, argmax routing"),
             ("q32high_4B_engine_v3", "R3: gated Q bonus + KL(0.02 tok / 0.05 router), soft overlong, unseen pool, argmax routing"),
             ("q32high_4B_engine_v4", "R4: R3 + flicker penalty 0.3, router KL 0.5"),
-            ("q32high_4B_engine_v5", "R5: R4 + hash-sampled routing, w_route 0.2")]
+            ("q32high_4B_engine_v5", "R5: R4 + hash-sampled routing, w_route 0.2"),
+            ("gl_job7_v5_32x16", "R5 on Greenland (8xH200): 32 prompts x 16 rollouts, 12k cap, 480 steps planned")]
     out = ["| run (reward) | step | AIME25 Avg@4 | unfinished | FCO | AIRW | think tok | speak blocks | short blocks | unsupported lines |", "|---|---|---|---|---|---|---|---|---|---|"]
     for run, label in runs:
         f = f"results/rl/{run}/eval.jsonl"
