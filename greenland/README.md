@@ -51,3 +51,6 @@ w_unsup 0.5 / w_short 0.05 / w_fco 0.05, eval every 50).
 - job 7 evals (AIME25 Avg@4, n=120): step 0 0.183 -> 50 0.317 -> 100 0.317 -> 150 **0.367** (unfinished 0.25, FCO 715, 11.8 blocks,
   7.2 short, think 6,988); training clean at step 151. Eval rows copied to results/rl/gl_job7_v5_32x16/eval.jsonl (via exec; the
   S3 mirror lags open files).
+- job 7 FINISHED (480 steps, ~5 min/step, Succeeded): AIME25 Avg@4 by step: 0 0.183, 50 0.317, 100 0.317, 150 0.367, 200 0.317,
+  250 0.383, 300 0.308, 350 0.375, 400 0.325, 450 0.392, 480 **0.408** (unfinished 0.38, FCO 359, 10.2 blocks, 7.5 short, think ~8k).
+  Final ckpt copied to p4 FSx results/rl/gl_job7_v5_32x16/ckpt; eval/log/args in results/rl/gl_job7_v5_32x16/ (repo).
