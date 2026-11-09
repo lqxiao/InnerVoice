@@ -325,10 +325,14 @@ gradient weight to 0.2; it is the first design with no flicker through step 100.
 |  | 300 | 0.308 | 0.283 | 391 | 950 | 7236 | 12.7 | 6.8 | 0.33 |
 |  | 350 | 0.375 | 0.342 | 815 | 1360 | 7820 | 8.4 | 5.6 | 0.26 |
 |  | 400 | 0.325 | 0.325 | 409 | 1096 | 7445 | 9.7 | 6.5 | 0.22 |
+| R5 final checkpoint (step 300), **Average@8** (n=240, ±5.6 pt) | 300 | 0.325 | 0.242 | 669 | 966 | 6865 | 9.4 | 5.1 | 0.32 |
 
-- Best clean checkpoint so far: R4 step 50 (0.333, 17.5% unfinished, FCO 1,586, 4.4 blocks) — vs the SFT start 0.14-0.19 (five step-0
-  evaluations of the same checkpoint spread 0.142-0.192, which is the ±8 pt noise in action) and the Qwen3-4B base in thinking mode
-  0.342 (62% unfinished at 12k, FCO 10,301). R5 trades a few points for stability (0.275 / 0.242 at steps 50 / 100, 6.7% unfinished).
+- R5 is the only design that stays clean to the end: p4 (32x8, 8k, 300 steps) 0.142 -> 0.375 / 0.342 / 0.367 at steps 200 / 250 / 300
+  (Average@4), and the final checkpoint scores **0.325 at Average@8** (n=240, ±5.6 pt; 24% unfinished, FCO 669, 9.4 blocks, 5.1 short
+  blocks, think 6,865). On Greenland (32x16, 12k) the same reward plateaus at 0.31-0.38 from step 150 (0.383 at step 250). Both are
+  ~+15-20 pt over the SFT start (five step-0 evaluations of the same checkpoint spread 0.142-0.192 — the ±8 pt noise in action) and at
+  parity with the Qwen3-4B base in thinking mode (0.342, 62% unfinished at 12k, FCO 10,301) while speaking from token ~400-900 in 8-12
+  public blocks. The earlier R4 step-50 point (0.333, FCO 1,586, 4.4 blocks) is the cleanest disclosure profile but that run then flickered.
 - Accuracy gains come with longer private reasoning (think 2.8k -> 4.8-6.8k tokens at steps 50-100), as in the paper's RL stage
   (AIRW 4,035 -> 8,519). The paper's numbers (Base 66.3, SxS SFT 38.3, SxS RL 80.0 on Qwen3-4B at a 32k budget, 480+120 steps x 512
   rollouts) are not directly comparable to our 12k-budget, 50-100-step runs.

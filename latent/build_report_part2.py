@@ -34,6 +34,10 @@ def engine_rl_table():
         for i, l in enumerate(lines):
             d = _json.loads(l); lab = label if i == 0 else ""
             out.append(f"| {lab} | {d['step']} | {d['aime_acc']:.3f} | {d['aime_unfinished']:.3f} | {d['aime_FCO']:.0f} | {d['aime_AIRW']:.0f} | {d['aime_n_think']:.0f} | {d['aime_n_speak_blocks']:.1f} | {d.get('aime_n_short', float('nan')):.1f} | {d.get('aime_unsup_frac', float('nan')):.2f} |")
+    f8 = "results/rl/q32high_4B_engine_v5/aime25_avg8_final.json"
+    if os.path.exists(f8):
+        d = _json.load(open(f8))
+        out.append(f"| R5 final checkpoint (step 300), **Average@8** (n={d['n'] * d['samples']}, ±5.6 pt) | 300 | {d['acc']:.3f} | {d['unfinished']:.3f} | {d['FCO']:.0f} | {d['AIRW']:.0f} | {d['n_think']:.0f} | {d['n_speak_blocks']:.1f} | {d['n_short']:.1f} | {d['unsup_frac']:.2f} |")
     return "\n".join(out)
 ENGINE_RL = engine_rl_table()
 
@@ -252,9 +256,12 @@ gradient weight to 0.2; it is the first design with no flicker through step 100.
 
 {ENGINE_RL}
 
-- Best clean checkpoint so far: R4 step 50 (0.333, 17.5% unfinished, FCO 1,586, 4.4 blocks) — vs the SFT start 0.14-0.19 (five step-0
-  evaluations of the same checkpoint spread 0.142-0.192, which is the ±8 pt noise in action) and the Qwen3-4B base in thinking mode
-  0.342 (62% unfinished at 12k, FCO 10,301). R5 trades a few points for stability (0.275 / 0.242 at steps 50 / 100, 6.7% unfinished).
+- R5 is the only design that stays clean to the end: p4 (32x8, 8k, 300 steps) 0.142 -> 0.375 / 0.342 / 0.367 at steps 200 / 250 / 300
+  (Average@4), and the final checkpoint scores **0.325 at Average@8** (n=240, ±5.6 pt; 24% unfinished, FCO 669, 9.4 blocks, 5.1 short
+  blocks, think 6,865). On Greenland (32x16, 12k) the same reward plateaus at 0.31-0.38 from step 150 (0.383 at step 250). Both are
+  ~+15-20 pt over the SFT start (five step-0 evaluations of the same checkpoint spread 0.142-0.192 — the ±8 pt noise in action) and at
+  parity with the Qwen3-4B base in thinking mode (0.342, 62% unfinished at 12k, FCO 10,301) while speaking from token ~400-900 in 8-12
+  public blocks. The earlier R4 step-50 point (0.333, FCO 1,586, 4.4 blocks) is the cleanest disclosure profile but that run then flickered.
 - Accuracy gains come with longer private reasoning (think 2.8k -> 4.8-6.8k tokens at steps 50-100), as in the paper's RL stage
   (AIRW 4,035 -> 8,519). The paper's numbers (Base 66.3, SxS SFT 38.3, SxS RL 80.0 on Qwen3-4B at a 32k budget, 480+120 steps x 512
   rollouts) are not directly comparable to our 12k-budget, 50-100-step runs.

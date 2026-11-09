@@ -14,7 +14,7 @@ m = SxSModel(SxSConfig(model_name=a.model, use_e_think=False, route_sample=a.rou
 rows = load_aime(a.aime); eng = Engines(a.engines.split(","), [m.eos_id, tok.eos_token_id], m.eos_id); eng.wait_ready()
 ids = [tok(tok.apply_chat_template([{"role": "user", "content": f"{r['prompt']}\n\n{INSTR}"}], tokenize=False, add_generation_prompt=True, enable_thinking=False), add_special_tokens=False)["input_ids"] for r in rows]
 t0 = time.time(); toks, fin = eng.generate(ids, a.samples, 1.0, a.max_new); t_gen = time.time() - t0
-p_ids = [ids[i // a.samples] for i in range(len(toks))]; types = label_types(m, tok, p_ids, toks, list(range(len(toks))), a.label_bs, "cuda")
+p_ids = [ids[i // a.samples] for i in range(len(toks))]; lab = label_types(m, tok, p_ids, toks, list(range(len(toks))), a.label_bs, "cuda"); types = [lab[i] for i in range(len(toks))]
 recs = []
 for i, (t, y) in enumerate(zip(toks, types)):
     r = rows[i // a.samples]; pub = tok.decode([x for x, yy in zip(t, y) if yy == 0], skip_special_tokens=True); tm = token_metrics(y, t, tok, "math"); ds = disclosure_stats(tok, t, y, r["prompt"])
