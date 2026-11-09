@@ -1,6 +1,6 @@
 # Part 2: InnerVoice — token-level disclosure routing with a two-expert last layer (SFT results under the SxS evaluation protocol)
 
-Generated 2026-11-08. All planned SFT runs and evaluations are complete.
+Generated 2026-11-09. All planned SFT runs and evaluations are complete.
 
 ## Summary
 - **InnerVoice** = Qwen3 + LoRA, last-layer FFN -> inner (think) / outer (answer) experts chosen per token by a disclosure gate; think
@@ -314,10 +314,17 @@ gradient weight to 0.2; it is the first design with no flicker through step 100.
 |  | 100 | 0.242 | 0.067 | 893 | 911 | 4766 | 6.9 | 2.9 | 0.42 |
 |  | 150 | 0.283 | 0.167 | 495 | 709 | 5166 | 8.7 | 3.8 | 0.41 |
 |  | 200 | 0.375 | 0.150 | 531 | 813 | 6097 | 8.6 | 3.7 | 0.37 |
+|  | 250 | 0.342 | 0.158 | 707 | 1030 | 6398 | 8.4 | 4.1 | 0.29 |
+|  | 300 | 0.367 | 0.225 | 661 | 995 | 7040 | 9.8 | 5.4 | 0.32 |
 | R5 on Greenland (8xH200): 32 prompts x 16 rollouts, 12k cap, 480 steps planned | 0 | 0.183 | 0.050 | 1005 | 563 | 3226 | 6.8 | 3.0 | 0.53 |
 |  | 50 | 0.317 | 0.192 | 3666 | 1160 | 6525 | 9.3 | 6.2 | 0.26 |
 |  | 100 | 0.317 | 0.183 | 991 | 851 | 6197 | 9.6 | 5.7 | 0.37 |
 |  | 150 | 0.367 | 0.250 | 715 | 829 | 6988 | 11.8 | 7.2 | 0.37 |
+|  | 200 | 0.317 | 0.300 | 918 | 892 | 7582 | 11.9 | 8.2 | 0.35 |
+|  | 250 | 0.383 | 0.242 | 448 | 891 | 7069 | 12.1 | 7.9 | 0.30 |
+|  | 300 | 0.308 | 0.283 | 391 | 950 | 7236 | 12.7 | 6.8 | 0.33 |
+|  | 350 | 0.375 | 0.342 | 815 | 1360 | 7820 | 8.4 | 5.6 | 0.26 |
+|  | 400 | 0.325 | 0.325 | 409 | 1096 | 7445 | 9.7 | 6.5 | 0.22 |
 
 - Best clean checkpoint so far: R4 step 50 (0.333, 17.5% unfinished, FCO 1,586, 4.4 blocks) — vs the SFT start 0.14-0.19 (five step-0
   evaluations of the same checkpoint spread 0.142-0.192, which is the ±8 pt noise in action) and the Qwen3-4B base in thinking mode
