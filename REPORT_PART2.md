@@ -327,12 +327,14 @@ gradient weight to 0.2; it is the first design with no flicker through step 100.
 |  | 400 | 0.325 | 0.325 | 409 | 1096 | 7445 | 9.7 | 6.5 | 0.22 |
 |  | 450 | 0.392 | 0.358 | 368 | 1281 | 8137 | 10.6 | 7.9 | 0.27 |
 |  | 480 | 0.408 | 0.383 | 359 | 1336 | 8074 | 10.2 | 7.5 | 0.23 |
-| R5 final checkpoint (step 300), **Average@8** (n=240, ±5.6 pt) | 300 | 0.325 | 0.242 | 669 | 966 | 6865 | 9.4 | 5.1 | 0.32 |
+| R5 p4 final checkpoint, **Average@8** (n=240, ±5.6 pt) | 300 | 0.325 | 0.242 | 669 | 966 | 6865 | 9.4 | 5.1 | 0.32 |
+| R5 Greenland final checkpoint, **Average@8** (n=240, ±5.6 pt) | 480 | 0.404 | 0.412 | 472 | 1232 | 8333 | 10.4 | 7.5 | 0.22 |
 
 - R5 is the only design that stays clean to the end: p4 (32x8, 8k, 300 steps) 0.142 -> 0.375 / 0.342 / 0.367 at steps 200 / 250 / 300
   (Average@4), and the final checkpoint scores **0.325 at Average@8** (n=240, ±5.6 pt; 24% unfinished, FCO 669, 9.4 blocks, 5.1 short
-  blocks, think 6,865). On Greenland (32x16, 12k) the same reward plateaus at 0.31-0.38 from step 150 (0.383 at step 250). Both are
-  ~+15-20 pt over the SFT start (five step-0 evaluations of the same checkpoint spread 0.142-0.192 — the ±8 pt noise in action) and at
+  blocks, think 6,865). On Greenland (32x16, 12k, 480 steps) the same reward plateaus at 0.31-0.38 from step 150 and ends at 0.392 / 0.408
+  (steps 450 / 480); the final checkpoint scores **0.404 at Average@8** (n=240; 41% unfinished, FCO 472, 10.4 blocks, think 8,333). Both are
+  ~+15-22 pt over the SFT start (five step-0 evaluations of the same checkpoint spread 0.142-0.192 — the ±8 pt noise in action) and at
   parity with the Qwen3-4B base in thinking mode (0.342, 62% unfinished at 12k, FCO 10,301) while speaking from token ~400-900 in 8-12
   public blocks. The earlier R4 step-50 point (0.333, FCO 1,586, 4.4 blocks) is the cleanest disclosure profile but that run then flickered.
 - Accuracy gains come with longer private reasoning (think 2.8k -> 4.8-6.8k tokens at steps 50-100), as in the paper's RL stage

@@ -48,4 +48,8 @@
   math RL with a 3k cap that collapsed AIME), budget-matched AIME control.
 - 2026-11-06: Scenario B built and verified (engine reproduces HF greedy decode token-for-token and router labels 882/882 on the 1.7B
   no-e_think ckpt; 1.7B smoke run: rollout 3 s, sync ~10 s/step). 4B `q32high_sxs_4B_noethink` SFT (500 steps) is the RL start point.
-- Open: 4B engine-RL run (`results/rl/<name>`, eval.jsonl every 50 steps), voice-stage rewards; self-distillation now feasible via the engines.
+- 2026-11-09: RL round 3 done (REPORT_PART2.md "RL round 3"): reward v5 (gated bounded Q bonus, soft overlong, KL to frozen SFT,
+  flicker penalty, hash-sampled routing) is stable; Greenland 480-step run (32x16, 12k) ends at AIME25 0.408 Avg@4 / 0.404 Avg@8
+  (SFT start 0.14-0.19, base thinking 0.342), FCO ~470, think ~8k, 41% unfinished at 12k. Greenland flow: `greenland/README.md`.
+- Open: voice-stage rewards; longer budgets (paper uses 32k eval / 39k rollout); re-run 4B SFT without the grad-ckpt routing bug;
+  self-distillation via the engines.
