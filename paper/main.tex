@@ -1,0 +1,190 @@
+\documentclass[letterpaper]{article} % DO NOT CHANGE THIS
+\usepackage[submission]{aaai2027}  % DO NOT CHANGE THIS
+\usepackage[hyphens]{url}  % DO NOT CHANGE THIS
+\usepackage{graphicx} % DO NOT CHANGE THIS
+\urlstyle{rm} % DO NOT CHANGE THIS
+\def\UrlFont{\rm}  % DO NOT CHANGE THIS
+\usepackage{natbib}  % DO NOT CHANGE THIS AND DO NOT ADD ANY OPTIONS TO IT
+\usepackage{caption} % DO NOT CHANGE THIS AND DO NOT ADD ANY OPTIONS TO IT
+\frenchspacing  % DO NOT CHANGE THIS
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{newfloat}
+\usepackage{listings}
+\DeclareCaptionStyle{ruled}{labelfont=normalfont,labelsep=colon,strut=off} % DO NOT CHANGE THIS
+\lstset{basicstyle={\footnotesize\ttfamily},numbers=left,numberstyle=\footnotesize,xleftmargin=2em,aboveskip=0pt,belowskip=0pt,showstringspaces=false,tabsize=2,breaklines=true}
+\floatstyle{ruled}
+\newfloat{listing}{tb}{lst}{}
+\floatname{listing}{Listing}
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,fit,backgrounds}
+\pdfinfo{
+/TemplateVersion (2027.1)
+}
+\newcommand{\placeholder}[1]{{\color{red}[PLACEHOLDER: #1]}}
+\newcommand{\iv}{\textsc{InnerVoice}}
+\newcommand{\think}{\texttt{think}}
+\newcommand{\speak}{\texttt{speak}}
+\setcounter{secnumdepth}{0}
+
+\title{InnerVoice: Thinking While Talking with a Last-Layer Disclosure Gate\\for Streaming Speech Assistants}
+\author{Anonymous submission}
+\affiliations{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Speech assistants built on reasoning language models face a latency dilemma: a model that thinks before it speaks is silent for thousands of tokens, while a model that answers directly loses the accuracy that private reasoning buys. We study \emph{disclosure routing}: the model emits one token stream in which every token is either private reasoning (readable, but never spoken) or public answer (sent to text-to-speech), and a learned gate decides the mode of each token. \iv{} implements this with a minimal change to a pretrained decoder: the feed-forward block of the \emph{last} layer is replaced by two experts initialised from the pretrained block---an inner (think) expert and an outer (answer) expert---selected per token by a small router on the last-layer hidden state; LoRA adapts the rest of the network. Because the decision for token $t{+}1$ is a function of the hidden state at $t$, decoding is a standard autoregressive loop plus one bit per token, which lets the model run unchanged in production inference engines (we provide a vLLM plugin that reproduces our reference implementation token-for-token). We build interleaved think/speak trajectories from four existing datasets (Knights \& Knaves, MuSiQue, ConvFill, DeepMath-103K) with a programmatic entailment alignment that only discloses what the preceding private reasoning supports, fine-tune Qwen3-1.7B/4B, and evaluate under the protocol of \citet{wei2026sxs} (accuracy on the public stream; token-index latency metrics ARI/ABO/AIRW and first-content onset) plus a playback simulator. After SFT, \iv{} matches think-then-speak SFT where reasoning does not matter and beats it where it does (AIME25, Qwen3-4B: 0.233 vs.\ 0.183 Average@4, first content at token 303 vs.\ 1,536). We then study RL on the disclosure policy and report, with evidence, three failure modes that dense shaping rewards produce (speak-everything, no-think, and word-level router flicker), trace flicker to REINFORCE on a near-deterministic argmax router, and fix it with a reward paid only on correct rollouts, a KL anchor to the SFT policy and hash-reproducible sampled routing. The resulting 480-step GRPO run lifts Qwen3-4B \iv{} on AIME25 from 0.14--0.19 to 0.40 (Average@8, n=240) at a 12k-token budget---above the base model's native thinking mode (0.34), which is silent for 10k tokens---while speaking its first content after about 470 tokens.
+\end{abstract}
+
+\section{Introduction}
+A voice assistant cannot hide a chain of thought behind a loading spinner. If the model reasons for ten thousand tokens before its first sentence, the user hears silence for minutes; if it skips reasoning, accuracy on anything non-trivial collapses (on AIME25 a direct-answer fine-tune of Qwen3-4B scores 0.04). The streaming setting therefore asks a question that the usual \emph{think-then-speak} recipe never has to answer: \emph{when} is it safe to say something, and \emph{what} should be said while the rest of the reasoning is still in progress?
+
+\citet{wei2026sxs} frame this as learning a \emph{disclosure policy} (``Speak-while-Solving'', SxS): the model interleaves private reasoning with public statements, each public statement must be entailed by the reasoning so far, and the policy is trained first by supervised fine-tuning on interleaved trajectories and then by reinforcement learning with correctness and timing rewards. Their evaluation protocol---accuracy on the public stream, plus token-index measures of how long the user waits---is the one we adopt. \citet{xie2025interleaved} reach a similar conclusion from the RL side on Knights \& Knaves and MuSiQue, and \citet{srinivas2025convfill} show, for voice agents, that even grounded filler spoken while a reasoner works makes the interaction feel responsive.
+
+This paper asks how little has to change in a pretrained decoder for it to think while it talks, and what it takes to train the resulting disclosure gate with RL without breaking it. Our contributions:
+\begin{itemize}
+\item \textbf{Architecture.} \iv{} replaces only the last decoder layer's feed-forward block with two experts (think / answer) chosen per token by a disclosure router, plus LoRA elsewhere. Both streams are readable text; the router's bit tells the client which tokens to voice. Because the routing decision is a pure function of the last-layer hidden state, the model runs in a standard inference engine: our vLLM plugin reproduces the reference decoder exactly (8/8 greedy sequences, 882/882 routing labels identical), and recovering the labels on the training side is a single forward pass.
+\item \textbf{Data without new annotation.} We convert four existing datasets into entailment-aligned interleaved trajectories: per-step search traces (Knights \& Knaves), decomposed multi-hop QA (MuSiQue), voice-agent dialogues with ``think-a-chunk / voice-it'' structure (ConvFill), and long-form mathematical solutions whose private and reader-facing parts are aligned by numeric anchors (DeepMath-103K; also distilled from Qwen3-32B, GPT-OSS-120B and GPT-6 Astra).
+\item \textbf{A scaled-down replication of the SxS protocol} on 1.7B/4B models, with the additional playback-simulator metrics a speech product cares about (time-to-first-content, pause distribution, premature commitments). SFT-stage \iv{} ties think-then-speak SFT on tasks where thinking does not help and beats it where it does, with roughly half the waiting.
+\item \textbf{An RL study of disclosure rewards} with engine-based rollouts. We document three collapse modes of GRPO-style training on the gate and identify their mechanism (dense shaping terms dominate the sparse correctness signal; argmax routing gives REINFORCE on the gate no exploration and pushes uncertain logits across the decision boundary), and we give a stable recipe: a bounded disclosure bonus paid only on correct rollouts, soft overlong punishment, a KL anchor to the SFT policy on tokens \emph{and} gate decisions, and hash-reproducible sampled routing. On AIME25 the recipe takes Qwen3-4B \iv{} from 0.14--0.19 to 0.40 while speaking from token $\sim$470.
+\end{itemize}
+We also report what did not work, including an earlier attempt to replace readable private reasoning with recurrent \emph{latent} computation, which gave no accuracy over a direct-answer baseline at any recurrence depth (Appendix~\ref{app:latent}).
+
+\section{Related Work}
+\paragraph{Disclosure policies and interleaved reasoning.}
+\citet{wei2026sxs} introduce the SxS problem, the entailment-based data construction, the ARI/ABO/AIRW metrics and a two-stage SFT+RL recipe on Qwen3-4B (AIME25: base 66.3, SxS SFT 38.3, SxS RL 80.0 at a 32k budget). \citet{xie2025interleaved} train interleaved reasoning with RL on Knights \& Knaves and MuSiQue and report latency and accuracy gains; we reuse their choice of datasets. \citet{srinivas2025convfill} (ConvFill) pair a small conversational model with a slow reasoner and release aligned ``thoughts / response'' turns with silence markers, which we use as disclosure-timing labels. Our architectural question---a per-token gate inside the network, implemented with a two-expert last layer---is orthogonal to these works and compatible with their rewards.
+
+\paragraph{Reasoning models and RL.} Qwen3 \citep{qwen3} exposes a native thinking mode that we use as the ``think-then-speak'' baseline. Our RL follows GRPO \citep{shao2024deepseekmath,deepseekr1} with the overlong handling of DAPO \citep{yu2025dapo}; the policy gradient on binary gate decisions is plain REINFORCE \citep{williams1992reinforce}. Mixture-of-experts layers \citep{fedus2022switch} motivate the two-expert block, although our router is supervised rather than load-balanced.
+
+\paragraph{Latent reasoning.} Coconut \citep{hao2024coconut} replaces reasoning tokens by continuous states. We tried recurrent latent computation first; it produced no gain on Qwen3 (Appendix~\ref{app:latent}), which motivated keeping the private stream as readable text that can be inspected and, in a product, logged.
+
+\section{InnerVoice}
+\subsection{Architecture}
+Let $h_t\in\mathbb{R}^d$ be the normalised input to the feed-forward block of the last decoder layer at position $t$ (Fig.~\ref{fig:arch}). \iv{} replaces that block with
+\begin{equation}
+y_t = \begin{cases} \mathrm{FFN}_{\text{think}}(h_t) & r_t = 1 \\ \mathrm{FFN}_{\text{answer}}(h_t) & r_t = 0 \end{cases},\quad
+p_t = \sigma\!\big(\mathrm{MLP}_\rho([h_t; b_t])\big),
+\end{equation}
+where both experts are initialised from the pretrained block and fully fine-tuned, $\mathrm{MLP}_\rho$ is a two-layer router ($d{+}4 \to 256 \to 1$) and $b_t\in\mathbb{R}^4$ are optional playback-buffer features (remaining audio, think tokens in the current block, chunks emitted, per-token think cost; zero in all experiments reported here). The decision $r_t$ determines the expert that produces the \emph{next} token's logits, so $r_t{=}1$ means ``token $t{+}1$ is private''. All other layers receive LoRA \citep{hu2022lora} with rank 16. An additive type embedding $e_{\text{think}}$ on private input tokens was part of the original design; the ablation in Table~\ref{tab:kkmq} shows it is unnecessary and the RL models drop it, which is also what makes the model a pure per-token function and therefore engine-compatible.
+
+\begin{figure}[t]\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tikzpicture}[font=\scriptsize, node distance=3mm, box/.style={draw, rounded corners=1pt, minimum height=5mm, inner sep=2pt, align=center}, >=Stealth]
+\node[box, minimum width=52mm] (emb) {token embeddings ($x_1\ldots x_t$)};
+\node[box, minimum width=52mm, above=of emb] (layers) {decoder layers $1\ldots L{-}1$ (+LoRA)};
+\node[box, minimum width=52mm, above=of layers] (attn) {layer $L$: attention (+LoRA) $\rightarrow$ norm $\rightarrow h_t$};
+\node[box, fill=blue!8, above left=5mm and -14mm of attn, minimum width=22mm] (think) {inner expert\\$\mathrm{FFN}_{\text{think}}$};
+\node[box, fill=green!8, above right=5mm and -14mm of attn, minimum width=22mm] (ans) {outer expert\\$\mathrm{FFN}_{\text{answer}}$};
+\node[box, fill=orange!12, above=5mm of attn, minimum width=16mm] (router) {disclosure gate\\$p_t=\sigma(\mathrm{MLP}[h_t;b_t])$};
+\node[box, minimum width=52mm, above=11mm of attn] (lm) {LM head $\rightarrow$ token $t{+}1$};
+\node[above=2mm of lm, align=center] (out) {$r_t{=}1$: \think{} stream (readable, never voiced) \quad $r_t{=}0$: \speak{} stream $\rightarrow$ TTS};
+\draw[->] (emb) -- (layers); \draw[->] (layers) -- (attn);
+\draw[->] (attn.north west) ++(8mm,0) |- (think.south);
+\draw[->] (attn.north east) ++(-8mm,0) |- (ans.south);
+\draw[->] (attn) -- (router);
+\draw[->, dashed] (router) -- (think); \draw[->, dashed] (router) -- (ans);
+\draw[->] (think.north) |- ++(0,2mm) -| (lm.south west) ; \draw[->] (ans.north) |- ++(0,2mm) -| (lm.south east);
+\end{tikzpicture}}
+\caption{\iv{}: only the last layer's feed-forward block changes. The gate reads the last-layer hidden state $h_t$ (and optional buffer features $b_t$) and selects the expert that produces token $t{+}1$; its bit labels that token as private or public. Both streams are ordinary text.}\label{fig:arch}
+\end{figure}
+
+\subsection{Training objective}
+Given a trajectory with token types $y_t\in\{\text{think},\text{speak}\}$, the loss is the token cross-entropy over both streams plus a binary cross-entropy on the gate,
+$\mathcal{L}=\mathrm{CE}(\text{tokens})+\lambda\,\mathrm{BCE}(p_t, \mathbb{1}[y_{t+1}{=}\text{think}])$, with positions where the type \emph{switches} weighted $5\times$ and teacher-forced routing (the expert indicated by the label) during training. Gate accuracy at switch points is the quantity to watch: a trajectory with correct text but a gate that switches a token late voices the beginning of a private thought.
+
+\subsection{Streaming inference and the playback simulator}
+Decoding is one autoregressive loop. At each step the gate's bit decides which expert produced the logits and therefore the mode of the sampled token; \speak{} tokens are appended to the current public chunk, which is sent to TTS at newlines; \think{} tokens go to the private stream. No decode-time controller is needed. We also simulate playback with 0.03\,s per generated token and 0.35\,s per spoken word to report time-to-first-content (TTFC), the P50/P95 pause between spoken chunks, and the \emph{premature-commitment} rate (public claims later contradicted or unsupported). Decode-time overrides of the gate (``think at most $k$ tokens per block'', ``think only while audio is buffered'') are evaluated in Table~\ref{tab:budget}; they must be trained in, not imposed.
+
+\subsection{Interleaved trajectories from existing data}\label{sec:data}
+All training data are converted programmatically from public datasets; nothing is hand-annotated.
+\textbf{Knights \& Knaves} \citep{xie2024kk} (6.2k puzzles, 2--8 people): the per-step search trace is the private stream; a person's verdict becomes a public chunk after the last reasoning step that mentions that person.
+\textbf{MuSiQue} \citep{trivedi2022musique} (6k questions, 2--4 hops): the decomposition with retrieved passages is private; a hop's answer is disclosed after the step citing its passage.
+\textbf{ConvFill} \citep{srinivas2025convfill} (67k turns): \texttt{thoughts[i]} (reasoner knowledge chunk) $\to$ private block, \texttt{response[i]} $\to$ public block, \texttt{<sil>} items (38\% of phrases) $\to$ public filler.
+\textbf{DeepMath-103K} \citep{he2025deepmath}: R1 solutions split at \texttt{</think>} into private reasoning (median 1.2k words) and a reader-facing multi-paragraph solution; paragraphs are interleaved into the reasoning by numeric/LaTeX-anchor coverage (a paragraph is disclosed once all its anchors have appeared in the private stream). We also distil 1,550 problems with Qwen3-32B at high reasoning effort through a two-section prompt, plus GPT-OSS-120B and GPT-6 Astra traces for a teacher comparison.
+The same conversion yields the two baselines of the protocol: \emph{Standard CoT} (all private reasoning first, then the public text) and \emph{no-think} (public text only), trained with the same recipe.
+
+\subsection{Reinforcement learning on the disclosure policy}\label{sec:rl}
+\paragraph{Infrastructure.} Rollouts come from vLLM \citep{kwon2023vllm} engines running an \iv{} model class (two-expert last layer and gate inside the forward pass); the trainer holds the policy (base + LoRA + experts + gate), recomputes the gate's decisions for each rollout with one forward pass, scores it, and after each update folds LoRA into the weights and hot-reloads the engines. On one 8-GPU node (4 engines, 4 trainer ranks) a step of 32 prompts $\times$ 8 rollouts with an 8k cap takes 3--4 minutes on A100s and about 5 minutes for 32 $\times$ 16 at 12k on H200s.
+
+\paragraph{Objective.} GRPO-style group-normalised advantages \citep{shao2024deepseekmath} with the policy gradient applied to the sum of token log-probabilities and gate-decision log-probabilities (weight $w_\rho$), token-mean normalised, plus a KL penalty (k3 estimator) to a frozen copy of the SFT policy on both tokens ($\beta{=}0.02$) and gate decisions ($\beta_\rho{=}0.5$). Truncated rollouts are kept with a flat penalty (soft overlong punishment, $-0.5$) rather than masked.
+
+\paragraph{Reward.} For a rollout with public text $P$ and private text $T$,
+\begin{equation}
+\begin{aligned}
+R = {}& \mathbb{1}[\text{correct}(P)]\,\big(1 + w_Q\,Q\big) - 0.5\,\mathbb{1}[\text{truncated}] \\
+ & - 0.3\,\min\!\big(1,\tfrac{n_{\text{short}}}{10}\big),
+\end{aligned}
+\end{equation}
+where $Q\in[0,1]$ is the mean of three disclosure-quality terms: the fraction of public lines whose numeric anchors were \emph{all} derived earlier in $T$ (an entailment proxy, the same rule used to build the SFT data), $1-\min(1, n_{\text{short}}/5)$ with $n_{\text{short}}$ the number of public blocks shorter than four tokens (gate flicker), and $1-\min(1,\mathrm{FCO}/1200)$ for early first content; $w_Q{=}0.2$. Every shaping term is thus a bounded bonus available only to correct rollouts, so no disclosure pattern can be rewarded on a wrong answer. Section~\ref{sec:failures} explains how we arrived at this form.
+
+\paragraph{Hash-reproducible sampled routing.} The SFT gate is almost deterministic (on Qwen3-4B, 0.4\% of response positions have $0.02<p_t<0.98$). With argmax routing, REINFORCE on the gate has no exploration, and negative advantages push the few uncertain logits across the decision boundary, where argmax then flips token to token (``flicker''). We instead sample $r_t=\mathbb{1}[p_t>u_t]$ with $u_t$ a deterministic integer hash of (token id, position), so the engine's decision is a proper sample from the gate's distribution and the trainer recomputes the identical labels without any side channel.
+
+\section{Experiments}
+\subsection{Protocol}
+We follow \citet{wei2026sxs}: accuracy is judged on the \emph{public} stream only (Knights \& Knaves: every verdict correct; MuSiQue: final answer, exact match with aliases; AIME25: last \texttt{\textbackslash boxed\{\}}), decoding is greedy or Average@$k$ at $T{=}1.0$, and waiting is measured in token indices over the generated sequence: ARI (mean index of public tokens), ABO (mean onset index of public blocks), AIRW (mean private span before each public block) and FCO (onset of the first public block with task content; filler excluded). Rows are the base model in native thinking mode and without thinking, SFT no-think, SFT Standard CoT (think-then-speak) and \iv{}, all trained on the same converted data. Test sets are 150 examples ($\pm$4 pt) for K\&K and MuSiQue and 30 problems $\times$ 4 samples ($\pm$8 pt) or $\times$ 8 ($\pm$5.6 pt) for AIME25 \citep{balunovic2025matharena}, with a 12k new-token budget (the paper uses 32k). Unfinished samples count as wrong. Models: Qwen3-1.7B and Qwen3-4B \citep{qwen3}; SFT 2,000 steps $\times$ 16 sequences (K\&K/MuSiQue), lr $2{\times}10^{-4}$ (LoRA) / $10^{-4}$ (experts, gate). Compute and software are listed in Appendix~\ref{app:infra}.
+
+\subsection{Knights \& Knaves and MuSiQue (SFT stage)}
+\input{tables/kk_mq}
+Table~\ref{tab:kkmq} shows the mechanics: \iv{} emits 2.7--2.9 public blocks per puzzle with AIRW 103--108 tokens versus 175--177 for think-then-speak and $\sim$2,100 for the base model in thinking mode, and on MuSiQue first content arrives at token 40 versus 97 (CoT SFT) and 950--970 (base). Accuracy is preserved relative to CoT SFT, not improved, at 1.7B (greedy K\&K 0.52 vs.\ 0.55; MuSiQue 0.57 vs.\ 0.59; all within $\pm$4 pt), and at 1.7B the private stream buys nothing over a direct-answer model (no-think 0.58). At 4B thinking helps on K\&K and \iv{} sits between no-think (0.74) and CoT (0.83) at 0.79 with half the inter-update wait; on MuSiQue the three 4B variants tie (0.70--0.72) and \iv{} is simply the fastest. Unlike the paper, where SxS SFT loses 20--25 points before RL recovers them, our SFT-stage model stays within noise of CoT SFT, presumably because these traces are two orders of magnitude shorter and highly structured. Ablations (LoRA-only experts, a 30\% truncated-think mix) are within noise; the type embedding $e_{\text{think}}$ changes neither switching (2.69 vs.\ 2.73 blocks) nor accuracy.
+
+\input{tables/budget}
+Table~\ref{tab:budget} tests decode-time control. Capping private tokens per block keeps accuracy but raises the premature-commitment rate (0.71 at a 32-token cap vs.\ 0.27 for the free gate): the gate's own stopping points are the least premature. Policies that force switches the model never saw in training score zero (the forced switch lands mid-sentence and the answer expert continues the thought), and forcing the \iv{} model to skip thinking collapses it (0.21 vs.\ 0.58 for a dedicated no-think model). A buffer-aware policy therefore has to be learned, which motivates the RL stage.
+
+\subsection{ConvFill (voice-agent turns)}
+\input{tables/convfill}
+ConvFill has no gold answers, so Table~\ref{tab:convfill} reports an LLM judge (Qwen3-4B, expected value of a 1--5 score given the reference knowledge) and rule-based filler statistics on 150 held-out turns. The judge does not separate variants (faithfulness saturates at 4.96); behaviour does: the gate reproduces the dataset's think-a-chunk / voice-it rhythm (3.05 public blocks per turn), has the lowest filler rate (0.24 vs.\ 0.33--0.34) and the earliest simulated first content (4.8\,s vs.\ 5.1--5.7\,s; 13.6\,s when the same model is forced to speak without thinking, because it rambles).
+
+\subsection{DeepMath $\rightarrow$ AIME25 (SFT stage)}
+\input{tables/aime_sft}
+On AIME25 thinking is necessary (no-think $\approx$ 0) and \iv{} beats think-then-speak at both sizes (Table~\ref{tab:aime_sft}: 0.175 vs.\ 0.075 at 1.7B, 0.233 vs.\ 0.183 at 4B) with first content at token 688 / 303 instead of 3,221 / 1,536 and 4.3--4.7 public blocks instead of 1.7. Two caveats. First, \iv{} thinks about twice as long (6.9k / 5.6k private tokens vs.\ 3.2k / 1.4k) and 17--22\% of its samples hit the cap; a budget-matched control at 1.7B gives 0.100 vs.\ 0.075 (4k cap), 0.117 vs.\ 0.042 (8k) and 0.175 vs.\ 0.075 (12k): \iv{} stays ahead at every cap, but its advantage grows with the budget because it keeps reasoning while the CoT student stops on its own at $\sim$3k tokens. Second, both are far below the base model's thinking mode (0.258 / 0.342), which however leaves 62--66\% of samples unfinished at 12k and is silent for 10k tokens---the paper's SFT-stage picture (SxS SFT 38.3 vs.\ base 66.3) at our scale.
+
+\input{tables/teacher}
+Table~\ref{tab:teacher} varies the teacher. Private-reasoning \emph{length} is what transfers: Qwen3-32B at default effort (374 words) gives 0.025--0.042, at high effort (1,230 words) 0.192 / 0.208 from only 1,550 problems, matching 11,684 R1 trajectories; GPT-6 Astra, whose reasoning is hidden and replaced by an 85-word explicit section, gives 0.000. \iv{} is at least as good as think-then-speak for every long-trace teacher, and the CoT students consistently learn to think \emph{less} than the \iv{} students trained on identical traces (e.g.\ 2,285 vs.\ 4,745 tokens), which we read as a hypothesis rather than a finding: interleaved disclosure keeps the unfinished parts of the answer in view, so the model keeps reasoning for them.
+
+\subsection{Reinforcement learning (Qwen3-4B)}\label{sec:rlres}
+\input{tables/rl_round3}
+Starting from the Qwen3-32B-high \iv{} SFT model retrained without $e_{\text{think}}$ (its five step-0 evaluations spread 0.142--0.192, the $\pm$8 pt noise in action), Table~\ref{tab:rl} tracks AIME25 through five reward designs; the mechanism behind R1--R4 is in Section~\ref{sec:failures}. R5 is the only design whose disclosure profile stays intact through training. Its small run (32 prompts $\times$ 8 rollouts, 8k cap, 300 steps on A100s) ends at 0.367 Average@4, its large run (32 $\times$ 16, 12k cap, 480 steps on H200s) at 0.408, rising from 0.183 at step 0 and staying in a 0.31--0.38 band from step 150. Table~\ref{tab:final} re-evaluates both final checkpoints at Average@8: 0.325 and 0.404. The 480-step model answers from token $\sim$470 in about ten public blocks, versus the base thinking mode's single block after 10,301 tokens, at the cost of longer private reasoning (8.3k tokens; 41\% of samples hit the 12k cap). Among samples that finish, its accuracy is 0.69 (the base model's is 0.89 on the 38\% it finishes); a 32k-budget evaluation matching the paper is \placeholder{32k-budget Average@8 for base / SFT / RL checkpoints; expected to raise all rows, run pending}.
+\input{tables/final_avg8}
+
+\subsection{Comparison with \citet{wei2026sxs}}
+The paper reports, for Qwen3-4B on AIME25 at a 32k budget: base 66.3 (AIRW 17,339), Standard CoT SFT 62.9, Standard CoT RL 73.8, SxS SFT 38.3 (AIRW 4,035), SxS RL 80.0 (AIRW 8,519), with GRPO on DAPO-17K at group 16, batch 32, 480+120 steps. Our numbers are not directly comparable---12k budget, 1,550 distilled SFT trajectories instead of a large multi-source corpus, LoRA plus a two-expert last layer instead of full fine-tuning, 480 RL steps on 8,918 DeepMath problems---but the shape agrees: SFT drops the model below its thinking mode, RL brings it back above, and RL roughly doubles the private reasoning per public block (our AIRW 563 $\to$ 1,232). Our SFT$\to$RL gain is +22 points against the paper's +42.
+
+\section{What Breaks Disclosure RL, and Why}\label{sec:failures}
+All runs in Table~\ref{tab:rl} share the trainer; only the reward and the prompt pool differ, which makes their failure modes informative.
+\paragraph{R1: speak-everything.} Correctness plus a first-content bonus ($0.1\cdot\mathrm{FCO}/600$, paid when correct) on the 1,550 SFT problems. Group accuracy was 0.84, so in most groups the \emph{only} in-group reward variance was the FCO term; the policy learned to open a public block at token $\sim$20 and, by step 100, to carry the reasoning in the public stream (94 public blocks, FCO 21, 52\% unfinished). Accuracy rose to 0.292, but the model was no longer disclosing conclusions---it was narrating.
+\paragraph{R2: dense penalties without an anchor} (run on the larger node, not in the table): penalising unsupported public lines (0.5), short blocks (0.05 each) and FCO with no KL term drove the policy first into word-level think/speak oscillation (step 50: 30 blocks, 21 short) and then into a 70-token private restatement followed by one short public paragraph (AIME 0.19 $\to$ 0.00 by step 100). Dense shaping terms are always on and consistent; correctness is sparse and noisy; GRPO optimises the former first.
+\paragraph{R3/R4: flicker.} Making every shaping term a bonus gated on correctness, keeping truncated rollouts with a flat penalty, adding the KL anchor and moving to unseen problems gave clean training for 50--70 steps (R4 step 50: 0.333 with 4.4 blocks) and then word-level flicker (R4 step 100: 104 blocks, 78 short). Raising the flicker penalty and the gate KL delayed but did not prevent it. The gate is near-deterministic, so with argmax routing the REINFORCE term $\nabla\log\pi(r_t)$ is non-zero only at the few uncertain positions, and a negative advantage pushes exactly those logits toward and across zero, where argmax decoding then alternates with tiny hidden-state changes.
+\paragraph{R5.} Sampled routing with a reproducible hash turns the gate update into a proper policy gradient and, with $w_\rho{=}0.2$, removes the flicker: short blocks per rollout fall from 3.8 to 0.6 over training instead of exploding, and both R5 runs keep 8--12 public blocks and FCO 400--900 on AIME25 to the end.
+
+\paragraph{A note on gradient checkpointing.} While adding sampled routing we found that our training forward cleared the teacher-forced gate decisions before backward, so under gradient checkpointing the last layer's recomputation used the gate's own decision rather than the label on the $\sim$1\% of positions where they disagree. All 4B SFT models were trained with checkpointing and carry this small bias; the RL runs after the fix are unaffected. \placeholder{re-run of the 4B SFT without the bug and its AIME25 number}.
+
+\section{Limitations}
+Sample sizes are small (150 test examples; 30 AIME problems $\times$ 4--8 samples), single seed, and we report differences within noise as ties. Our budget (12k) is below the paper's (32k) and the base thinking mode is penalised most by it. The entailment proxy for ``unsupported disclosure'' only checks numeric and LaTeX anchors. The playback simulator uses fixed per-token and per-word costs rather than a TTS engine; \placeholder{end-to-end latency with a real streaming TTS and user study}. We did not evaluate GPQA \citep[gated;][]{wei2026sxs}, and the voice-stage rewards that use the buffer features $b_t$ (stall-aware pacing) are implemented but untrained: \placeholder{buffer-aware RL results}. Finally, \iv{} inherits every risk of the base model; the readable private stream makes its reasoning auditable but is not a safety mechanism.
+
+\section{Conclusion}
+A per-token disclosure gate over a two-expert last layer is enough to make a pretrained decoder think while it talks: it is trainable from converted existing data, runs in a standard inference engine, matches think-then-speak fine-tuning where reasoning does not matter and beats it where it does, and---once the gate is trained with a reward that cannot be gamed by wrong answers, a KL anchor and genuinely sampled decisions---RL lifts a 4B model above its own native thinking mode on AIME25 while speaking after a few hundred tokens instead of ten thousand.
+
+\bibliography{refs}
+
+\appendix
+\section{Appendix}
+\subsection{Hyperparameters}\label{app:hparams}
+SFT: LoRA rank 16, $\alpha{=}32$ on all attention and MLP projections; last-layer experts fully fine-tuned; gate hidden 256, output bias initialised to $-1$ (answer); loss weight $\lambda{=}1$, switch positions $\times 5$; AdamW, lr $2{\times}10^{-4}$ (LoRA) / $10^{-4}$ (experts, gate), bf16, context 4,096 (DeepMath) / 2,048 (others); K\&K+MuSiQue 2,000 steps $\times$ 16 sequences; DeepMath-R1 1,000 (1.7B) / 800 (4B) steps; Qwen3-32B-high 500 steps $\times$ 16 sequences at 4B.
+RL (R5): 32 prompts $\times$ 8 (A100) or 16 (H200) rollouts per step, $T{=}1$, cap 8k / 12k, group-normalised advantages, lr $10^{-5}$ (LoRA) / $5{\times}10^{-5}$ (experts, gate), grad-norm clip 1.0, $w_\rho{=}0.2$, $\beta{=}0.02$, $\beta_\rho{=}0.5$, $w_Q{=}0.2$, FCO reference 1,200, truncation penalty 0.5, flicker penalty 0.3, prompt pool 8,918 DeepMath problems of difficulty $\geq$5 not used in SFT; AIME25 Average@4 every 50 steps through the engines.
+
+\subsection{Compute and software}\label{app:infra}
+SFT and HF-decode evaluation: single NVIDIA A100-80GB per run. RL: one 8$\times$A100-80GB node (4 vLLM 0.9.1 engines + 4 trainer ranks) and one 8$\times$H200 node; PyTorch 2.7/2.9, transformers 4.52/4.57, PEFT 0.15/0.21, vLLM 0.9.1 (custom model class and worker extension for in-place weight reload). Teacher traces via Amazon Bedrock (Qwen3-32B, GPT-OSS-120B, GPT-6 Astra). One RL step of 32 $\times$ 8 at 8k takes 3--4 min (rollout 100 s, label pass 20 s, update 90 s, weight sync 20 s).
+
+\subsection{Phase 1: recurrent latent reasoning (null result)}\label{app:latent}
+Before \iv{} we tested whether private reasoning could be replaced by $K$ recurrent passes over $M{=}8$ latent slots (an adapter with cross-attention to the context, or the LM itself as the recurrence, Coconut-style), feeding the slots as soft tokens before the answer. On three self-generated verifiable task families (arithmetic chains, templated word problems, DAG reachability) with Qwen3-1.7B/4B and matched training budgets, every $K\in\{0,1,2,4,8\}$ and five remedies (context-initialised state, mid-layer context, CODI-style self-distillation, verified intermediate-result supervision, latent-only training) landed within seed noise ($\pm$0.8 pt) of a LoRA-only direct-answer baseline (57.1\% / 69.1\%), while explicit chain-of-thought reached 80.9\% / 79.9\%. Diagnostics showed the latent state was context-independent (across-example std 0.0007; shuffling slots across examples changed nothing) and that when forced to be context-dependent the adapter could not compute the intermediates (first intermediate decoded at 23\%). This is why the private stream in \iv{} is readable text.
+
+\subsection{Data examples}\label{app:data}
+\placeholder{one K\&K, one MuSiQue, one ConvFill and one DeepMath interleaved trajectory, with gate labels}.
+
+\input{ReproducibilityChecklist}
+\end{document}

@@ -1,0 +1,32 @@
+**
+(main.tex
+LaTeX2e <2021-11-15> patch level 1
+L3 programming layer <2022-02-24> (article.cls
+Document Class: article 2021/10/04 v1.4n Standard LaTeX document class
+(size10.clo
+File: size10.clo 2021/10/04 v1.4n Standard LaTeX file (size option)
+)
+\c@part=\count181
+\c@section=\count182
+\c@subsection=\count183
+\c@subsubsection=\count184
+\c@paragraph=\count185
+\c@subparagraph=\count186
+\c@figure=\count187
+\c@table=\count188
+\abovecaptionskip=\skip47
+\belowcaptionskip=\skip48
+\bibindent=\dimen138
+) (aaai2027.sty
+Package: aaai2027 2027/10/21 AAAI 2027 Submission format
+
+Conference Style for AAAI for LaTeX 2e
+(iftex.sty
+Package: iftex 2022/02/03 v1.0f TeX engine tests
+)
+
+ ********************************************
+ * pdfTeX is required to compile this document.
+ * Sorry!
+ ********************************************
+

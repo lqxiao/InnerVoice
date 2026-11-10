@@ -1,0 +1,11 @@
+\begin{table*}[t]\centering\footnotesize\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrrrrrrrrrrr}\toprule
+reward / run & @0 & @50 & @100 & @150 & @200 & @250 & @300 & @350 & @400 & @450 & @480 & FCO & blocks & short \\\midrule
+R1 (FCO bonus, SFT prompts) & 0.158 & 0.217 & 0.292 & -- & -- & -- & -- & -- & -- & -- & -- & 21 & 93.8 & -- \\
+R3 (gated $Q$, KL, unseen pool) & 0.192 & 0.308 & 0.283 & -- & -- & -- & -- & -- & -- & -- & -- & 351 & 165.7 & 111.8 \\
+R4 (+flicker pen., router KL 0.5) & 0.150 & 0.333 & 0.200 & -- & -- & -- & -- & -- & -- & -- & -- & 236 & 104.1 & 78.1 \\
+R5 (+sampled routing), p4 32$\times$8 & 0.142 & 0.275 & 0.242 & 0.283 & 0.375 & 0.342 & 0.367 & -- & -- & -- & -- & 661 & 9.8 & 5.4 \\
+R5, Greenland 32$\times$16 & 0.183 & 0.317 & 0.317 & 0.367 & 0.317 & 0.383 & 0.308 & 0.375 & 0.325 & 0.392 & 0.408 & 359 & 10.2 & 7.5 \\
+\bottomrule\end{tabular}}
+\caption{RL round 3 on Qwen3-4B InnerVoice: AIME25 Average@4 (n=120, $\pm$8 pt) at each evaluation step; the last three columns describe the final evaluated checkpoint (FCO, public blocks, short blocks $<$4 tokens = router flicker). R1 and R3--R4 end in degenerate disclosure (speak-everything or flicker) despite rising or flat accuracy.}\label{tab:rl}
+\end{table*}

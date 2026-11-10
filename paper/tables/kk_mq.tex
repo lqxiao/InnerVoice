@@ -1,0 +1,17 @@
+\begin{table*}[t]\centering\footnotesize\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrrrrrrr}\toprule
+ & \multicolumn{5}{c}{Knights \& Knaves (150)} & \multicolumn{5}{c}{MuSiQue (150)} \\\cmidrule(lr){2-6}\cmidrule(lr){7-11}
+method & K\&K acc & K\&K Avg@4 & AIRW & FCO & blocks & MuSiQue acc & MuSiQue Avg@4 & AIRW & FCO & blocks \\\midrule
+Qwen3-1.7B base, thinking mode & 0.413 & – & 2111 & 2114 & 0.81 & 0.408 & – & 951 & 970 & 0.94 \\
+Qwen3-1.7B base, no thinking & 0.273 & – & 0 & 619 & 1.00 & 0.272 & – & 0 & 16 & 1.00 \\
+Qwen3-4B base, thinking mode & 0.333 & – & 2046 & 2059 & 0.81 & 0.496 & – & 940 & 948 & 0.92 \\
+SFT no-think (1.7B) & 0.580 & 0.508 & 0 & 1 & 1.00 & 0.584 & 0.600 & 0 & 1 & 1.00 \\
+SFT Standard CoT (1.7B) & 0.547 & 0.533 & 177 & 270 & 1.40 & 0.592 & 0.566 & 96 & 97 & 1.00 \\
+InnerVoice SFT (1.7B) & 0.520 & 0.512 & 108 & 202 & 2.73 & 0.568 & 0.542 & 39 & 40 & 2.45 \\
+no e\_think input embedding (1.7B) & 0.540 & 0.527 & 106 & 189 & 2.69 & 0.592 & 0.592 & 39 & 39 & 2.41 \\
+SFT no-think (4B) & 0.740 & 0.667 & 0 & 1 & 1.00 & 0.720 & 0.694 & 0 & 1 & 1.00 \\
+SFT Standard CoT (4B) & 0.833 & 0.828 & 175 & 258 & 1.41 & 0.704 & 0.670 & 97 & 101 & 1.06 \\
+InnerVoice SFT (4B) & 0.793 & 0.778 & 103 & 177 & 2.85 & 0.712 & 0.686 & 39 & 40 & 2.46 \\
+\bottomrule\end{tabular}}
+\caption{SFT-stage results on K\&K and MuSiQue (150 test examples each, $\pm$4 pt). acc = greedy accuracy on the public stream (K\&K: all verdicts correct); Avg@4 at $T{=}1$. AIRW/FCO in token indices; blocks = public blocks per example.}\label{tab:kkmq}
+\end{table*}
