@@ -62,13 +62,13 @@ def main():
     ap.add_argument("--lr", type=float, default=2e-4); ap.add_argument("--lr_rest", type=float, default=1e-4, help="experts, router, e_think")
     ap.add_argument("--lam", type=float, default=1.0); ap.add_argument("--think_weight", type=float, default=1.0); ap.add_argument("--switch_weight", type=float, default=5.0)
     ap.add_argument("--max_len", type=int, default=1536); ap.add_argument("--warmup", type=int, default=50); ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--no_expert_ft", action="store_true", help="experts via LoRA only"); ap.add_argument("--lora_r", type=int, default=16); ap.add_argument("--no_e_think", action="store_true"); ap.add_argument("--grad_ckpt", action="store_true")
+    ap.add_argument("--no_expert_ft", action="store_true", help="experts via LoRA only"); ap.add_argument("--lora_r", type=int, default=16); ap.add_argument("--no_e_think", action="store_true"); ap.add_argument("--grad_ckpt", action="store_true"); ap.add_argument("--shared_ffn", action="store_true", help="ablation: single shared FFN + gate (no experts)")
     ap.add_argument("--mix_trunc", type=float, default=0.0, help="fraction of examples with truncated think (budget robustness)")
     ap.add_argument("--n_train", type=int, default=0); ap.add_argument("--init", default=""); ap.add_argument("--format", default="sxs", choices=["sxs", "cot", "nothink", "tags"])
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True); json.dump(vars(a), open(os.path.join(a.out, "args.json"), "w"), indent=1)
     set_seed(a.seed); log = JsonLogger(os.path.join(a.out, "log.jsonl")); dev = "cuda"
-    model = SxSModel(SxSConfig(model_name=a.model, lora_r=a.lora_r, expert_full_ft=not a.no_expert_ft, use_e_think=not a.no_e_think, grad_ckpt=a.grad_ckpt), device=dev)
+    model = SxSModel(SxSConfig(model_name=a.model, lora_r=a.lora_r, expert_full_ft=not a.no_expert_ft, use_e_think=not a.no_e_think, grad_ckpt=a.grad_ckpt, shared_ffn=a.shared_ffn), device=dev)
     if a.init: model.load(a.init)
     tok = model.tok
     rows = [json.loads(l) for l in open(a.data)]

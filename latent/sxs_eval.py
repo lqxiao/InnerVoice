@@ -111,9 +111,9 @@ def main():
     ap.add_argument("--out", required=True); ap.add_argument("--policy", default="gate"); ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--think_cost", type=float, default=0.0, help="simulated seconds per think token (0 = measured)")
     ap.add_argument("--max_new_tokens", type=int, default=600); ap.add_argument("--stride", type=int, default=1)
-    ap.add_argument("--samples", type=int, default=1, help="k samples per example (Average@k); >1 uses temperature sampling"); ap.add_argument("--temperature", type=float, default=1.0); ap.add_argument("--no_expert_ft", action="store_true"); ap.add_argument("--no_e_think", action="store_true")
+    ap.add_argument("--samples", type=int, default=1, help="k samples per example (Average@k); >1 uses temperature sampling"); ap.add_argument("--temperature", type=float, default=1.0); ap.add_argument("--no_expert_ft", action="store_true"); ap.add_argument("--no_e_think", action="store_true"); ap.add_argument("--shared_ffn", action="store_true")
     a = ap.parse_args(); os.makedirs(a.out, exist_ok=True)
-    model = SxSModel(SxSConfig(model_name=a.model, expert_full_ft=not a.no_expert_ft, use_e_think=not a.no_e_think), device="cuda"); model.load(a.ckpt); model.eval()
+    model = SxSModel(SxSConfig(model_name=a.model, expert_full_ft=not a.no_expert_ft, use_e_think=not a.no_e_think, shared_ffn=a.shared_ffn), device="cuda"); model.load(a.ckpt); model.eval()
     tok = model.tok; audio = AudioModel()
     rows = [json.loads(l) for l in open(a.data)]
     rows = rows[::a.stride]

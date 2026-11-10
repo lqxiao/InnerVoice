@@ -26,14 +26,14 @@ def main():
     ap.add_argument("--model", default="Qwen/Qwen3-1.7B"); ap.add_argument("--ckpt", default="", help="empty = base model"); ap.add_argument("--thinking", type=int, default=1, help="base model only")
     ap.add_argument("--data", default="/scratch/liqiangx/extdata/aime25/data/train-00000-of-00001.parquet"); ap.add_argument("--out", required=True)
     ap.add_argument("--samples", type=int, default=4); ap.add_argument("--max_new_tokens", type=int, default=12000); ap.add_argument("--bs", type=int, default=30)
-    ap.add_argument("--no_expert_ft", action="store_true"); ap.add_argument("--no_e_think", action="store_true"); ap.add_argument("--tag", default="")
+    ap.add_argument("--no_expert_ft", action="store_true"); ap.add_argument("--no_e_think", action="store_true"); ap.add_argument("--tag", default=""); ap.add_argument("--shared_ffn", action="store_true")
     ap.add_argument("--tags_format", action="store_true", help="checkpoint trained with --format tags: decode with the answer expert only and split think/speak by <think> tags")
     a = ap.parse_args(); os.makedirs(a.out, exist_ok=True)
     rows = load_aime(a.data)
     recs = []
     if a.ckpt:
         from latent.sxs_model import SxSModel, SxSConfig
-        model = SxSModel(SxSConfig(model_name=a.model, expert_full_ft=not a.no_expert_ft, use_e_think=not a.no_e_think), device="cuda"); model.load(a.ckpt); model.eval(); tok = model.tok
+        model = SxSModel(SxSConfig(model_name=a.model, expert_full_ft=not a.no_expert_ft, use_e_think=not a.no_e_think, shared_ffn=a.shared_ffn), device="cuda"); model.load(a.ckpt); model.eval(); tok = model.tok
         prompts = [tok.apply_chat_template([{"role": "user", "content": f"{r['prompt']}\n\n{INSTR}"}], tokenize=False, add_generation_prompt=True, enable_thinking=False) for r in rows]
         enc = [tok(p, add_special_tokens=False)["input_ids"] for p in prompts]
         for si in range(a.samples):

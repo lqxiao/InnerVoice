@@ -24,10 +24,10 @@ def route_hash_u(ids, pos):
 
 
 class TwoExpertMLP(nn.Module):
-    def __init__(self, mlp: nn.Module, d: int, router_hidden: int = 256, full_ft: bool = True):
+    def __init__(self, mlp: nn.Module, d: int, router_hidden: int = 256, full_ft: bool = True, shared: bool = False):
         super().__init__()
         self.answer = mlp
-        self.think = copy.deepcopy(mlp)
+        self.think = mlp if shared else copy.deepcopy(mlp)   # shared=True: ablation 'single FFN + disclosure gate' (gate only labels visibility)
         if full_ft:
             for p in list(self.answer.parameters()) + list(self.think.parameters()):
                 p.requires_grad_(True)
@@ -70,6 +70,7 @@ class SxSConfig:
     use_e_think: bool = True
     grad_ckpt: bool = False
     route_sample: bool = False      # hash-sampled routing at decode time (engine + trainer label pass); False = argmax
+    shared_ffn: bool = False        # ablation: one shared FFN (no think/answer experts), gate only decides visibility
 
 
 class SxSModel(nn.Module):
@@ -95,7 +96,7 @@ class SxSModel(nn.Module):
             base.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
             if hasattr(base, "enable_input_require_grads"): base.enable_input_require_grads()
         last = layers[-1]
-        last.mlp = TwoExpertMLP(last.mlp, d, cfg.router_hidden, full_ft=cfg.expert_full_ft)
+        last.mlp = TwoExpertMLP(last.mlp, d, cfg.router_hidden, full_ft=cfg.expert_full_ft, shared=cfg.shared_ffn)
         self.moe = last.mlp; self.moe.sample_hash = cfg.route_sample
         self.e_think = nn.Parameter(torch.randn(d) * 0.02)
         self.to(device); self.device = device
