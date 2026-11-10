@@ -77,7 +77,8 @@ def token_metrics(types, tids, tok, source):
         if meaningful_text(txt, source):
             fco = on; break
     return {"ARI": sum(speak_idx) / len(speak_idx) if speak_idx else float(n + 1), "ABO": sum(b[0] for b in blocks) / len(blocks) if blocks else float(n + 1),
-            "AIRW": sum(waits) / len(waits) if waits else float(n), "FCO": float(fco), "n_tokens": n, "n_think": sum(types), "n_speak": n - sum(types), "n_speak_blocks": len(blocks)}
+            "AIRW": sum(waits) / len(waits) if waits else float(n), "FCO": float(fco), "n_tokens": n, "n_think": sum(types), "n_speak": n - sum(types), "n_speak_blocks": len(blocks),
+            "ttft_norm": float(fco) / max(1, n)}
 
 def token_f1(a, b):
     ta, tb = norm(a).split(), norm(b).split()

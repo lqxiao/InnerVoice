@@ -13,7 +13,7 @@ import torch, torch.distributed as dist
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from latent.sxs_model import SxSModel, SxSConfig
 from latent.sxs_rl import score_rollout, build_train_batch, public_chunks, disclosure_stats
-from latent.sxs_eval import token_metrics
+from latent.sxs_eval import token_metrics, score_kk, score_mq
 from latent.sxs_eval_math import correct as math_correct, INSTR as AIME_INSTR, load_aime
 from latent.sxs_export import write_weights
 from latent.common import set_seed, JsonLogger
@@ -110,6 +110,8 @@ def main():
     ap.add_argument("--eval_every", type=int, default=50); ap.add_argument("--aime_data", default=""); ap.add_argument("--aime_samples", type=int, default=4); ap.add_argument("--aime_max_new", type=int, default=12000)
     ap.add_argument("--no_expert_ft", action="store_true"); ap.add_argument("--seed", type=int, default=0); ap.add_argument("--no_eval0", action="store_true")
     ap.add_argument("--route_sample", action="store_true", help="engines use hash-sampled routing (export with --route_sample); label pass replicates it")
+    ap.add_argument("--eval_data", default="", help="comma-separated K&K/MuSiQue test jsonl files (rows with source + chunk_checks) evaluated every --eval_every steps")
+    ap.add_argument("--eval_stride", type=int, default=4); ap.add_argument("--eval_limit", type=int, default=150); ap.add_argument("--eval_samples", type=int, default=4); ap.add_argument("--eval_max_new", type=int, default=1024)
     a = ap.parse_args()
     dist.init_process_group("nccl"); rank = dist.get_rank(); W = dist.get_world_size(); local = int(os.environ.get("LOCAL_RANK", rank))
     torch.cuda.set_device(local); dev = f"cuda:{local}"; is0 = rank == 0
@@ -170,7 +172,32 @@ def main():
             elog.log(**res); print(f"[eval step {step}] " + json.dumps({k: (round(v, 3) if isinstance(v, float) else v) for k, v in res.items()}), flush=True)
         dist.barrier()
 
-    if not a.no_eval0: run_eval(0)
+    eval_sets = []
+    for f in [x for x in a.eval_data.split(",") if x]:
+        rows_e = [json.loads(l) for l in open(f)][::a.eval_stride][:a.eval_limit]; eval_sets.append((os.path.basename(f).replace(".jsonl", ""), rows_e))
+
+    def run_eval_sets(step):
+        """K&K / MuSiQue: greedy accuracy and Average@k (T=1) on the public stream, plus waiting metrics; one eval.jsonl row per set."""
+        for name, rows_e in eval_sets:
+            t0 = time.time(); payload = None
+            if is0:
+                ids = [tok(tok.apply_chat_template([{"role": "user", "content": r["prompt"]}], tokenize=False, add_generation_prompt=True, enable_thinking=False), add_special_tokens=False)["input_ids"] for r in rows_e]
+                tg, fg = engines.generate(ids, 1, 0.0, a.eval_max_new); ts, fs = engines.generate(ids, a.eval_samples, 1.0, a.eval_max_new); payload = (ids, tg, fg, ts, fs)
+            ids, tg, fg, ts, fs = bcast(payload)
+            yg = labels_all(ids, tg); ys = labels_all([ids[i // a.eval_samples] for i in range(len(ts))], ts)
+            if is0:
+                def rec(r, t, y, f):
+                    ch = public_chunks(tok, t, y); tm = token_metrics(y, t, tok, r["source"]); ds = disclosure_stats(tok, t, y, r["prompt"])
+                    oks, ok = (score_kk(ch, r["chunk_checks"]) if r["source"] == "kk" else score_mq(ch, r["chunk_checks"]))
+                    return {"ok": float(ok), "chunk_acc": sum(oks) / max(1, len(oks)), "finished": f, "n_short": ds["n_short"], **{k: tm[k] for k in ("FCO", "AIRW", "n_think", "n_speak_blocks", "n_tokens", "ttft_norm")}}
+                G = [rec(r, t, y, f) for r, t, y, f in zip(rows_e, tg, yg, fg)]; S = [rec(rows_e[i // a.eval_samples], t, y, f) for i, (t, y, f) in enumerate(zip(ts, ys, fs))]
+                mean = lambda L, k: sum(x[k] for x in L) / max(1, len(L))
+                res = {"step": step, "set": name, "n": len(rows_e), "acc_greedy": mean(G, "ok"), f"acc_avg{a.eval_samples}": mean(S, "ok"), "chunk_acc_greedy": mean(G, "chunk_acc"), "unfinished_greedy": 1 - mean(G, "finished"),
+                       **{f"{k}_greedy": mean(G, k) for k in ("FCO", "AIRW", "n_think", "n_speak_blocks", "n_tokens", "ttft_norm", "n_short")}, "t_eval": time.time() - t0}
+                elog.log(**res); print(f"[eval {name} step {step}] " + json.dumps({k: (round(v, 3) if isinstance(v, float) else v) for k, v in res.items()}), flush=True)
+            dist.barrier()
+
+    if not a.no_eval0: run_eval(0); run_eval_sets(0)
     for step in range(1, a.steps + 1):
         t0 = time.time(); payload = None
         if is0:
@@ -234,7 +261,7 @@ def main():
                   f"kl={mi['kl_tok']:.4f}/{mi['kl_route']:.4f} | roll {t_roll:.0f}s label {t_label:.0f}s train {t_train:.0f}s sync {t_sync:.0f}s", flush=True)
         if step % a.eval_every == 0 or step == a.steps:
             if is0: model.save(os.path.join(a.out, f"ckpt_step{step}"))
-            run_eval(step)
+            run_eval(step); run_eval_sets(step)
     if is0: model.save(os.path.join(a.out, "ckpt")); print("DONE", a.out, flush=True)
     dist.barrier(); dist.destroy_process_group()
 

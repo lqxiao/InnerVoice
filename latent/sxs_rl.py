@@ -85,8 +85,11 @@ def score_rollout(ex, chunks, tm, w, ds=None, finished=True):
         prem = sum(1 for c in chunks if not any(g and g in norm(c) for g in golds)); unp = 0
         inter = oks[:-1] if len(oks) > 1 else oks
     r_inter = (sum(inter) / len(inter)) if inter else 0.0
+    ds = ds or {"n_unsup": 0, "n_judged": 0, "n_short": 0}
     R = float(final_ok) + w["inter"] * float(final_ok) * r_inter - w["prem"] * prem - w["fmt"] * unp - w["fco"] * tm["FCO"] / w["fco_ref"] - w["len"] * tm["n_tokens"] / w["len_ref"]
-    return R, {"final": float(final_ok), "chunk_acc": sum(oks) / max(1, len(oks)), "prem": prem, "unp": unp, "FCO": tm["FCO"], "n_tok": tm["n_tokens"], "n_think": tm["n_think"], "blocks": tm["n_speak_blocks"]}
+    R -= w.get("short_pen", 0.0) * min(1.0, ds["n_short"] / 10.0) + w.get("trunc", 0.0) * float(not finished)
+    return R, {"final": float(final_ok), "chunk_acc": sum(oks) / max(1, len(oks)), "prem": prem, "unp": unp, "FCO": tm["FCO"], "n_tok": tm["n_tokens"], "n_think": tm["n_think"], "blocks": tm["n_speak_blocks"],
+               "unsup_frac": 0.0, "n_short": ds["n_short"]}
 
 def build_train_batch(tok, prompt_ids_list, toks, types, pad):
     seqs, ist, lm, rl, rm = [], [], [], [], []
