@@ -8,7 +8,7 @@
               -> policy gradient on token + decision log-probs -> rank 0 folds LoRA into merged safetensors -> engines hot-reload.
     every --eval_every steps: AIME25 Average@k through the engines (T=1, --aime_max_new), metrics in <out>/eval.jsonl, ckpt saved.
 """
-import argparse, json, os, sys, time, random, statistics, threading, urllib.request
+import argparse, json, os, sys, time, random, statistics, threading, urllib.request, urllib.error
 import torch, torch.distributed as dist
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from latent.sxs_model import SxSModel, SxSConfig
@@ -19,9 +19,15 @@ from latent.sxs_export import write_weights
 from latent.common import set_seed, JsonLogger
 
 
-def post(url, obj, timeout=10800):
+def post(url, obj, timeout=10800, retries=3):
     req = urllib.request.Request(url, data=json.dumps(obj).encode(), headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r: return json.loads(r.read())
+    for k in range(retries):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r: return json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            body = e.read().decode(errors="ignore")[:500]; print(f"[engine] HTTP {e.code} from {url} (attempt {k + 1}/{retries}): {body}", flush=True)
+            if k + 1 == retries: raise
+            time.sleep(5)
 
 
 class Engines:
