@@ -8,7 +8,7 @@ set -euo pipefail
 
 PROFILE=greenland
 REPO_ROOT=/local/home/liqiangx/STP/rufus_gym/src/RufusGym
-SCRIPT_REL=examples/innervoice/run-innervoice-rl-greenland.sh
+SCRIPT_REL=${SCRIPT_REL:-examples/innervoice/run-innervoice-rl-greenland.sh}; TASK=${TASK:-innervoice-rl}
 IMAGE=docker.io/vllm/vllm-openai:v0.9.1
 INITIATIVE=${GREENLAND_INITIATIVE_ID:-SFAI-shared-p5en-eks}
 
@@ -21,7 +21,7 @@ echo "=== submitting innervoice-rl (AWS_PROFILE=${PROFILE}) ==="
 cd "${REPO_ROOT}"
 touch .gl_skip_pip   # marker: the run script manages its own env inside the vllm image (see runcmd.tpl guard)
 AWS_PROFILE="${PROFILE}" "${REPO_ROOT}/.venv/bin/python" -m scripts.greenland.submit \
-  --task innervoice-rl \
+  --task "${TASK}" \
   --nodes 1 \
   --mode run \
   --script "${SCRIPT_REL}" \
