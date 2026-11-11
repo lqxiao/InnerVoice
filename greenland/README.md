@@ -63,3 +63,6 @@ w_unsup 0.5 / w_short 0.05 / w_fco 0.05, eval every 50).
 - 1.7B CoT (think-then-speak) RL (`kk_cotrl_1.7B_v5`), 4B InnerVoice RL (`kk_rl_4B_v5`), 4B CoT RL (`kk_cotrl_4B_v5`): running.
 - 1.7B CoT RL (`kk_cotrl_1.7B_v5`) Average@8: SFT 0.547 / 0.573 -> step 150 0.609 / 0.604 -> step 300 0.603 / 0.611 (K&K / MuSiQue);
   1 public block, FCO 289-312 / 96-98, TTFT_norm 0.90 / 0.78. => CoT RL gains +6 / +3-4, InnerVoice RL +3-4 / +1 at 1.7B; both small.
+- 2026-11-11 job `liqiangx-innervoice-apple-1111-224147` JobId 08010dc6-bfe3-4599-9059-d71404bdfcf3: Apple-style 4B replication, three
+  runs in one pod (Interleave+IR / Interleave / Think-answer; `run-apple-rl-greenland.sh`), 300 steps, 32x8, 2k cap. Same runs also on
+  p41 locally (apple_*_4B); 1.7B set on p4 (apple_*_1.7B).
