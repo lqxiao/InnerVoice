@@ -6,7 +6,7 @@ CKPT=$1; NAME=$2; STEPS=${3:-300}; MAXNEW=${4:-1024}
 MODEL=${MODEL:-Qwen/Qwen3-1.7B}; ENGINE_GPUS=${ENGINE_GPUS:-"4 5 6 7"}; TRAIN_GPUS=${TRAIN_GPUS:-0,1,2,3}; MML=${MML:-4096}; PORT0=${PORT0:-8001}; ENGINE_ARGS=${ENGINE_ARGS:-}; MICRO_BS=${MICRO_BS:-4}
 EXTRA=${IV_EXTRA:-"--w_inter 0.5 --w_prem 1.0 --w_fmt 0.2 --w_fco 0 --w_trunc 0.5 --soft_overlong --kl_beta 0.02 --kl_route_beta 0.5 --w_short_pen 0.3 --w_route 0.2 --route_sample"}
 H=/fsx-alignment/dedicated-fsx-data-repo-alignment-us-east-1/home/liqiangx/innervoice
-source $H/env.sh; export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+source ${ENV_SH:-$H/env.sh}; cd $H/think; export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True   # ENV_SH: alternative venv (e.g. /scratch/liqiangx/env.sh on p41 whose /opt/conda differs)
 LIVE=/tmp/instance_storage/liqiangx/live_$NAME; OUT=results/rl/$NAME; mkdir -p logs results/rl
 FIRST_TRAIN=${TRAIN_GPUS%%,*}
 CUDA_VISIBLE_DEVICES=$FIRST_TRAIN python latent/sxs_export.py --model $MODEL --ckpt $CKPT --out $LIVE --route_sample || exit 1

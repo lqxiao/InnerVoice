@@ -7,7 +7,7 @@ NAME=$1; STEPS=${2:-300}; MAXNEW=${3:-2048}
 MODEL=${MODEL:-Qwen/Qwen3-1.7B}; TEMPLATE=${TEMPLATE:-interleave}; IR=${IR:-0}; ENGINE_GPUS=${ENGINE_GPUS:-"1"}; TRAIN_GPUS=${TRAIN_GPUS:-0}; MML=${MML:-4096}; PORT0=${PORT0:-8041}
 ENGINE_ARGS=${ENGINE_ARGS:-}; MICRO_BS=${MICRO_BS:-4}; G=${G:-8}; PROMPTS=${PROMPTS:-32}; TEMP=${TEMP:-0.8}; KL=${KL:-0.001}
 H=/fsx-alignment/dedicated-fsx-data-repo-alignment-us-east-1/home/liqiangx/innervoice
-source $H/env.sh; export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+source ${ENV_SH:-$H/env.sh}; cd $H/think; export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True   # ENV_SH: alternative venv (e.g. /scratch/liqiangx/env.sh on p41 whose /opt/conda differs)
 LIVE=/tmp/instance_storage/liqiangx/live_$NAME; OUT=results/rl/$NAME; mkdir -p logs results/rl
 FIRST_TRAIN=${TRAIN_GPUS%%,*}
 CUDA_VISIBLE_DEVICES=$FIRST_TRAIN python latent/sxs_export.py --model $MODEL --plain --out $LIVE || exit 1   # untrained base as the initial policy
