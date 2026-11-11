@@ -12,7 +12,7 @@ for g in $GPUS; do
   sudo docker run -d --name $NAME --gpus "\"device=$g\"" --network host --ipc host --shm-size 16g \
     -v /fsx-alignment:/fsx-alignment -v /tmp/instance_storage/liqiangx:/tmp/instance_storage/liqiangx \
     -e HF_HUB_OFFLINE=1 -e VLLM_LOGGING_LEVEL=WARNING -e PYTHONUNBUFFERED=1 \
-    --entrypoint bash vllm/vllm-openai:v0.9.1 -c "pip install -q --no-deps --no-build-isolation $THINK/latent/vllm_plugin >/tmp/pip.log 2>&1; python3 $THINK/latent/vllm_server.py --model $MODEL --port $PORT --max_model_len $MML $EXTRA"
+    --entrypoint bash vllm/vllm-openai:v0.9.1 -c "cp -r $THINK/latent/vllm_plugin /tmp/plugin && pip install -q --no-deps --no-build-isolation /tmp/plugin >/tmp/pip.log 2>&1; python3 $THINK/latent/vllm_server.py --model $MODEL --port $PORT --max_model_len $MML $EXTRA"
   echo "$NAME -> port $PORT"
   i=$((i + 1))
 done

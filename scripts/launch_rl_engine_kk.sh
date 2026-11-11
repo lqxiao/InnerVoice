@@ -16,7 +16,7 @@ for g in $ENGINE_GPUS; do
   PORT=$((PORT0 + i)); CN=iv_engine_$g; sudo docker rm -f $CN >/dev/null 2>&1
   sudo docker run -d --name $CN --gpus "\"device=$g\"" --network host --ipc host --shm-size 16g -v /fsx-alignment:/fsx-alignment -v /tmp/instance_storage/liqiangx:/tmp/instance_storage/liqiangx \
     -e HF_HUB_OFFLINE=1 -e VLLM_LOGGING_LEVEL=WARNING -e PYTHONUNBUFFERED=1 --entrypoint bash vllm/vllm-openai:v0.9.1 \
-    -c "pip install -q --no-deps --no-build-isolation $H/think/latent/vllm_plugin >/tmp/pip.log 2>&1; python3 $H/think/latent/vllm_server.py --model $LIVE --port $PORT --max_model_len $MML --max_num_seqs 256 $ENGINE_ARGS" >/dev/null
+    -c "cp -r $H/think/latent/vllm_plugin /tmp/plugin && pip install -q --no-deps --no-build-isolation /tmp/plugin >/tmp/pip.log 2>&1; python3 $H/think/latent/vllm_server.py --model $LIVE --port $PORT --max_model_len $MML --max_num_seqs 256 $ENGINE_ARGS" >/dev/null
   URLS="${URLS:+$URLS,}http://127.0.0.1:$PORT"; i=$((i + 1))
 done
 for g in $ENGINE_GPUS; do until sudo docker logs iv_engine_$g 2>&1 | grep -q -E "SERVER_READY|Traceback"; do sleep 10; done; sudo docker logs iv_engine_$g 2>&1 | grep -E "SERVER_READY|Traceback" | tail -1; done
