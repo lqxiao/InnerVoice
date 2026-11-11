@@ -17,6 +17,7 @@ from latent.sxs_eval import token_metrics, score_kk, score_mq
 from latent.sxs_eval_math import correct as math_correct, INSTR as AIME_INSTR, load_aime
 from latent.sxs_export import write_weights
 from latent.common import set_seed, JsonLogger
+from latent.apple_rl import TEMPLATES, TASK_HINT, parse_tags, token_types_from_tags, apple_reward, public_lines, score_final
 
 
 def post(url, obj, timeout=10800, retries=3):
@@ -97,7 +98,7 @@ def bcast(obj, src=0):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="Qwen/Qwen3-4B"); ap.add_argument("--ckpt", required=True); ap.add_argument("--data", required=True); ap.add_argument("--out", required=True)
+    ap.add_argument("--model", default="Qwen/Qwen3-4B"); ap.add_argument("--ckpt", default="", help="sxs.pt dir; empty = fresh LoRA on the base model (plain mode)"); ap.add_argument("--data", required=True); ap.add_argument("--out", required=True)
     ap.add_argument("--live", required=True, help="exported model dir served by the engines; rewritten every step")
     ap.add_argument("--engines", required=True, help="comma-separated base URLs, e.g. http://127.0.0.1:8001,http://127.0.0.1:8002")
     ap.add_argument("--steps", type=int, default=300); ap.add_argument("--prompts", type=int, default=32); ap.add_argument("--G", type=int, default=8)
@@ -116,6 +117,9 @@ def main():
     ap.add_argument("--eval_every", type=int, default=50); ap.add_argument("--aime_data", default=""); ap.add_argument("--aime_samples", type=int, default=4); ap.add_argument("--aime_max_new", type=int, default=12000)
     ap.add_argument("--no_expert_ft", action="store_true"); ap.add_argument("--seed", type=int, default=0); ap.add_argument("--no_eval0", action="store_true")
     ap.add_argument("--route_sample", action="store_true", help="engines use hash-sampled routing (export with --route_sample); label pass replicates it")
+    ap.add_argument("--plain", action="store_true", help="Apple-style token-controlled baseline: plain Qwen3+LoRA, <think>/<answer> tags, rule-based rewards")
+    ap.add_argument("--template", default="interleave", choices=list(TEMPLATES)); ap.add_argument("--ir", action="store_true", help="conditional time-discounted intermediate reward")
+    ap.add_argument("--temperature", type=float, default=1.0); ap.add_argument("--lam_f", type=float, default=1.0); ap.add_argument("--lam_a", type=float, default=1.0); ap.add_argument("--r_base", type=float, default=0.5); ap.add_argument("--gate_eps", type=float, default=0.0)
     ap.add_argument("--eval_data", default="", help="comma-separated K&K/MuSiQue test jsonl files (rows with source + chunk_checks) evaluated every --eval_every steps")
     ap.add_argument("--eval_stride", type=int, default=4); ap.add_argument("--eval_limit", type=int, default=150); ap.add_argument("--eval_samples", type=int, default=4); ap.add_argument("--eval_max_new", type=int, default=1024)
     a = ap.parse_args()
@@ -125,7 +129,17 @@ def main():
         os.makedirs(a.out, exist_ok=True); json.dump(vars(a), open(os.path.join(a.out, "args.json"), "w"), indent=1)
         log = JsonLogger(os.path.join(a.out, "log.jsonl")); elog = JsonLogger(os.path.join(a.out, "eval.jsonl"))
     set_seed(a.seed)
-    model = SxSModel(SxSConfig(model_name=a.model, expert_full_ft=not a.no_expert_ft, use_e_think=False, grad_ckpt=True, route_sample=a.route_sample), device=dev); model.load(a.ckpt); tok = model.tok
+    model = SxSModel(SxSConfig(model_name=a.model, expert_full_ft=not a.no_expert_ft, use_e_think=False, grad_ckpt=True, route_sample=a.route_sample, plain=a.plain), device=dev)
+    if a.ckpt: model.load(a.ckpt)
+    tok = model.tok
+    def build_prompt(e):
+        if a.plain:
+            msgs = [{"role": "system", "content": TEMPLATES[a.template] + TASK_HINT.get(e.get("source", ""), "")}, {"role": "user", "content": e["prompt"]}]
+            txt = tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True, enable_thinking=False)
+            txt = txt.replace("<think>\n\n</think>\n\n", "")   # Qwen3 injects an empty think block when thinking is off; the format must come from the policy
+            return tok(txt, add_special_tokens=False)["input_ids"]
+        return tok(tok.apply_chat_template([{"role": "user", "content": e["prompt"]}], tokenize=False, add_generation_prompt=True, enable_thinking=False), add_special_tokens=False)["input_ids"]
+    gate_state = {"prev_acc": 0.0}
     eos = [model.eos_id, tok.eos_token_id]
     engines = Engines(a.engines.split(","), eos, model.eos_id) if is0 else None
     rows = [json.loads(l) for l in open(a.data)]; rng = random.Random(a.seed)
@@ -153,6 +167,7 @@ def main():
     dist.barrier()
 
     def labels_all(p_ids, toks):
+        if a.plain: return [token_types_from_tags(tok, t)[0] for t in toks]
         model.eval(); idxs = list(range(len(toks)))[rank::W]
         mine = label_types(model, tok, p_ids, toks, idxs, a.label_bs, dev); torch.cuda.empty_cache()
         allp = [None] * W; dist.all_gather_object(allp, mine); merged = {}
@@ -187,11 +202,20 @@ def main():
         for name, rows_e in eval_sets:
             t0 = time.time(); payload = None
             if is0:
-                ids = [tok(tok.apply_chat_template([{"role": "user", "content": r["prompt"]}], tokenize=False, add_generation_prompt=True, enable_thinking=False), add_special_tokens=False)["input_ids"] for r in rows_e]
-                tg, fg = engines.generate(ids, 1, 0.0, a.eval_max_new); ts, fs = engines.generate(ids, a.eval_samples, 1.0, a.eval_max_new); payload = (ids, tg, fg, ts, fs)
+                ids = [build_prompt(r) for r in rows_e]
+                tg, fg = engines.generate(ids, 1, 0.0, a.eval_max_new); ts, fs = engines.generate(ids, a.eval_samples, a.temperature, a.eval_max_new); payload = (ids, tg, fg, ts, fs)
             ids, tg, fg, ts, fs = bcast(payload)
             yg = labels_all(ids, tg); ys = labels_all([ids[i // a.eval_samples] for i in range(len(ts))], ts)
-            if is0:
+            if is0 and a.plain:
+                def rec_p(r, t, f):
+                    segs, fmt = parse_tags(tok.decode(t, skip_special_tokens=True)); ok, oks, _ = score_final(r, public_lines(segs)); _, first = token_types_from_tags(tok, t)
+                    return {"ok": float(ok), "format_ok": float(fmt), "finished": f, "ttft_norm": first / max(1, len(t)), "n_answer_segs": float(sum(1 for m, _ in segs if m == "answer")), "n_tokens": len(t), "FCO": float(first)}
+                G = [rec_p(r, t, f) for r, t, f in zip(rows_e, tg, fg)]; S = [rec_p(rows_e[i // a.eval_samples], t, f) for i, (t, f) in enumerate(zip(ts, fs))]
+                mean = lambda L, k: sum(x[k] for x in L) / max(1, len(L))
+                res = {"step": step, "set": name, "n": len(rows_e), "acc_greedy": mean(G, "ok"), f"acc_avg{a.eval_samples}": mean(S, "ok"), "format_greedy": mean(G, "format_ok"), "format_sampled": mean(S, "format_ok"), "unfinished_greedy": 1 - mean(G, "finished"),
+                       **{f"{k}_greedy": mean(G, k) for k in ("ttft_norm", "n_answer_segs", "n_tokens", "FCO")}, "t_eval": time.time() - t0}
+                elog.log(**res); print(f"[eval {name} step {step}] " + json.dumps({k: (round(v, 3) if isinstance(v, float) else v) for k, v in res.items()}), flush=True)
+            elif is0:
                 def rec(r, t, y, f):
                     ch = public_chunks(tok, t, y); tm = token_metrics(y, t, tok, r["source"]); ds = disclosure_stats(tok, t, y, r["prompt"])
                     oks, ok = (score_kk(ch, r["chunk_checks"]) if r["source"] == "kk" else score_mq(ch, r["chunk_checks"]))
@@ -208,19 +232,27 @@ def main():
         t0 = time.time(); payload = None
         if is0:
             exs = rng.sample(rows, a.prompts); exs_rep = [e for e in exs for _ in range(a.G)]
-            pr = [tok(tok.apply_chat_template([{"role": "user", "content": e["prompt"]}], tokenize=False, add_generation_prompt=True, enable_thinking=False), add_special_tokens=False)["input_ids"] for e in exs]
-            toks, fin = engines.generate(pr, a.G, 1.0, a.max_new); payload = (exs_rep, pr, toks, fin)
+            pr = [build_prompt(e) for e in exs]
+            toks, fin = engines.generate(pr, a.G, a.temperature, a.max_new); payload = (exs_rep, pr, toks, fin)
         exs_rep, pr, toks, fin = bcast(payload); p_ids = [pr[i // a.G] for i in range(len(toks))]; t_roll = time.time() - t0
         t1 = time.time(); types = labels_all(p_ids, toks); t_label = time.time() - t1
         # ---- rewards + advantages (rank 0, broadcast)
         adv = infos = None
         if is0:
             Rs, infos = [], []
-            for e, t, y, f in zip(exs_rep, toks, types, fin):
-                ch = public_chunks(tok, t, y); tm = token_metrics(y, t, tok, e["source"]); ds = disclosure_stats(tok, t, y, e["prompt"])
-                R, info = score_rollout(e, ch, tm, w, ds, finished=f); Rs.append(R); infos.append(info)
+            if a.plain:
+                parsed = [parse_tags(tok.decode(t, skip_special_tokens=True)) for t in toks]
+                finals = [score_final(e, public_lines(sg))[0] for e, (sg, _) in zip(exs_rep, parsed)]
+                acc_b = sum(finals) / len(finals); gate_open = acc_b > gate_state["prev_acc"] + a.gate_eps; gate_state["prev_acc"] = acc_b
+                for e, t, (sg, fmt) in zip(exs_rep, toks, parsed):
+                    R_, info = apple_reward(e, sg, fmt, a.ir, gate_open, a.lam_f, a.lam_a, a.r_base); _, first = token_types_from_tags(tok, t)
+                    info.update(ttft_norm=first / max(1, len(t)), n_tok=len(t), gate=float(gate_open), FCO=float(first)); Rs.append(R_); infos.append(info)
+            else:
+                for e, t, y, f in zip(exs_rep, toks, types, fin):
+                    ch = public_chunks(tok, t, y); tm = token_metrics(y, t, tok, e["source"]); ds = disclosure_stats(tok, t, y, e["prompt"])
+                    R_, info = score_rollout(e, ch, tm, w, ds, finished=f); Rs.append(R_); infos.append(info)
             R = torch.tensor(Rs).view(a.prompts, a.G); finished = torch.tensor(fin).view(a.prompts, a.G)
-            valid = torch.ones_like(finished).float() if a.soft_overlong else finished.float(); cnt = valid.sum(1, keepdim=True).clamp(min=1)
+            valid = torch.ones_like(finished).float() if (a.soft_overlong or a.plain) else finished.float(); cnt = valid.sum(1, keepdim=True).clamp(min=1)
             mean = (R * valid).sum(1, keepdim=True) / cnt; var = (((R - mean) ** 2) * valid).sum(1, keepdim=True) / cnt
             adv = ((R - mean) / (var.sqrt() + 1e-6)) * valid; keep = (var.sqrt().squeeze(1) > 1e-6).repeat_interleave(a.G); adv = (adv.view(-1) * keep.float()).tolist()
         adv = torch.tensor(bcast(adv))
@@ -263,7 +295,8 @@ def main():
                       t_rollout=t_roll, t_label=t_label, t_train=t_train, t_sync=t_sync, mean_len=statistics.mean(len(t) for t in toks), p95_len=sorted(len(t) for t in toks)[int(0.95 * (len(toks) - 1))],
                       kl_tok=kl_tok_all / Bn, kl_route=kl_route_all / Bn)
             log.log(**mi)
-            print(f"step {step}: R={mi['R']:.3f} acc={mi['final']:.3f} FCO={mi['FCO']:.0f} think={mi['n_think']:.0f} blocks={mi['blocks']:.2f} unsup={mi.get('unsup_frac', 0):.2f} short={mi.get('n_short', 0):.1f} trunc={mi['n_truncated']} groups={mi['groups_kept']}/{a.prompts} "
+            if a.plain: print(f"step {step}: R={mi['R']:.3f} acc={mi['final']:.3f} fmt={mi['format_ok']:.2f} segs={mi['n_answer_segs']:.2f} ttft={mi['ttft_norm']:.2f} ir={mi['r_ir']:.3f} gate={mi['gate']:.0f} trunc={mi['n_truncated']} groups={mi['groups_kept']}/{a.prompts} kl={mi['kl_tok']:.4f} | roll {t_roll:.0f}s train {t_train:.0f}s sync {t_sync:.0f}s", flush=True)
+            else: print(f"step {step}: R={mi['R']:.3f} acc={mi['final']:.3f} FCO={mi['FCO']:.0f} think={mi['n_think']:.0f} blocks={mi['blocks']:.2f} unsup={mi.get('unsup_frac', 0):.2f} short={mi.get('n_short', 0):.1f} trunc={mi['n_truncated']} groups={mi['groups_kept']}/{a.prompts} "
                   f"kl={mi['kl_tok']:.4f}/{mi['kl_route']:.4f} | roll {t_roll:.0f}s label {t_label:.0f}s train {t_train:.0f}s sync {t_sync:.0f}s", flush=True)
         if step % a.eval_every == 0 or step == a.steps:
             if is0: model.save(os.path.join(a.out, f"ckpt_step{step}"))

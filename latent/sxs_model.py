@@ -71,6 +71,7 @@ class SxSConfig:
     grad_ckpt: bool = False
     route_sample: bool = False      # hash-sampled routing at decode time (engine + trainer label pass); False = argmax
     shared_ffn: bool = False        # ablation: one shared FFN (no think/answer experts), gate only decides visibility
+    plain: bool = False             # plain Qwen3 + LoRA policy (no experts, no gate, no e_think): token-controlled baselines (Apple-style)
 
 
 class SxSModel(nn.Module):
@@ -96,8 +97,11 @@ class SxSModel(nn.Module):
             base.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
             if hasattr(base, "enable_input_require_grads"): base.enable_input_require_grads()
         last = layers[-1]
-        last.mlp = TwoExpertMLP(last.mlp, d, cfg.router_hidden, full_ft=cfg.expert_full_ft, shared=cfg.shared_ffn)
-        self.moe = last.mlp; self.moe.sample_hash = cfg.route_sample
+        if cfg.plain:
+            self.moe = None
+        else:
+            last.mlp = TwoExpertMLP(last.mlp, d, cfg.router_hidden, full_ft=cfg.expert_full_ft, shared=cfg.shared_ffn)
+            self.moe = last.mlp; self.moe.sample_hash = cfg.route_sample
         self.e_think = nn.Parameter(torch.randn(d) * 0.02)
         self.to(device); self.device = device
         self.eos_id = self.tok.convert_tokens_to_ids("<|im_end|>")
@@ -127,7 +131,7 @@ class SxSModel(nn.Module):
         loss_mask: 1 on response tokens (targets). Returns dict(loss_ce, loss_route, ...)."""
         B, L = ids.shape
         pos = (mask.long().cumsum(-1) - 1).clamp(min=0)
-        self.moe.route = route_label.bool(); self.moe.buf = buf
+        if self.moe is not None: self.moe.route = route_label.bool(); self.moe.buf = buf
         out = self.lm(inputs_embeds=self.inputs_embeds(ids, is_think), attention_mask=mask, position_ids=pos, use_cache=False, return_dict=True)
         # NOTE: keep self.moe.route = route_label until the caller's backward has run. With gradient checkpointing the last layer is
         # re-executed during backward and must see the same teacher-forced route (clearing it here made the recompute fall back to
@@ -138,8 +142,8 @@ class SxSModel(nn.Module):
         loss_ce = (ce * w).sum() / w.sum().clamp(min=1)
         ce_think = (ce * lm_ * is_think[:, 1:]).sum() / (lm_ * is_think[:, 1:]).sum().clamp(min=1)
         ce_ans = (ce * lm_ * (1 - is_think[:, 1:])).sum() / (lm_ * (1 - is_think[:, 1:])).sum().clamp(min=1)
-        rl = self.moe.router_logits
-        bce = F.binary_cross_entropy_with_logits(rl, route_label.float(), reduction="none")
+        rl = self.moe.router_logits if self.moe is not None else torch.zeros_like(route_label, dtype=torch.float)
+        bce = F.binary_cross_entropy_with_logits(rl, route_label.float(), reduction="none") if self.moe is not None else torch.zeros_like(rl)
         is_switch = (route_label.bool() != is_think.bool()).float()          # next-token type differs from current token type
         rw = route_mask.float() * (1.0 + (switch_weight - 1.0) * is_switch)
         loss_route = (bce * rw).sum() / rw.sum().clamp(min=1)
