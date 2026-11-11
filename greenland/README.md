@@ -61,3 +61,5 @@ w_unsup 0.5 / w_short 0.05 / w_fco 0.05, eval every 50).
   Greedy: 0.533 / 0.616 -> 0.593 / 0.616 -> 0.573 / 0.632. FCO (K&K) 208 -> 221 -> 255, blocks 2.58 -> 2.36 -> 2.16, short blocks 0 -> 0.02 -> 0.17.
   => small K&K gain (+3-4 pt, SE ~1.4), no MuSiQue gain; disclosure drifts slightly later / fewer blocks by step 300.
 - 1.7B CoT (think-then-speak) RL (`kk_cotrl_1.7B_v5`), 4B InnerVoice RL (`kk_rl_4B_v5`), 4B CoT RL (`kk_cotrl_4B_v5`): running.
+- 1.7B CoT RL (`kk_cotrl_1.7B_v5`) Average@8: SFT 0.547 / 0.573 -> step 150 0.609 / 0.604 -> step 300 0.603 / 0.611 (K&K / MuSiQue);
+  1 public block, FCO 289-312 / 96-98, TTFT_norm 0.90 / 0.78. => CoT RL gains +6 / +3-4, InnerVoice RL +3-4 / +1 at 1.7B; both small.
