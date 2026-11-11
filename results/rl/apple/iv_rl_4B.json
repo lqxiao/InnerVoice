@@ -1,0 +1,40 @@
+{
+ "model": "Qwen/Qwen3-4B",
+ "ckpt": "results/rl/kk_rl_4B_v5/ckpt",
+ "samples": 4,
+ "route_sample": true,
+ "sets": {
+  "test_kk_ivprompt": {
+   "n": 300,
+   "acc_greedy": 0.9,
+   "acc_avg4": 0.8916666666666667,
+   "chunk_acc_greedy": 0.9577777777777777,
+   "chunk_acc_sampled": 0.9539305555555556,
+   "FCO_greedy": 173.86333333333334,
+   "AIRW_greedy": 113.88582539682538,
+   "ARI_greedy": 234.03411951545155,
+   "n_think_greedy": 241.61666666666667,
+   "n_speak_blocks_greedy": 2.296666666666667,
+   "n_tokens_greedy": 267.4266666666667,
+   "ttft_norm_greedy": 0.6408615854728924,
+   "n_short_greedy": 0.0,
+   "t": 138.40494799613953
+  },
+  "test_mq_ivprompt": {
+   "n": 185,
+   "acc_greedy": 0.654054054054054,
+   "acc_avg4": 0.6283783783783784,
+   "chunk_acc_greedy": 0.7423423423423424,
+   "chunk_acc_sampled": 0.7388513513513514,
+   "FCO_greedy": 38.08108108108108,
+   "AIRW_greedy": 38.70027027027027,
+   "ARI_greedy": 100.67939489020725,
+   "n_think_greedy": 130.5891891891892,
+   "n_speak_blocks_greedy": 3.383783783783784,
+   "n_tokens_greedy": 170.34054054054053,
+   "ttft_norm_greedy": 0.23514097732716457,
+   "n_short_greedy": 0.0,
+   "t": 166.47573900222778
+  }
+ }
+}
