@@ -1,0 +1,40 @@
+{
+ "model": "Qwen/Qwen3-1.7B",
+ "ckpt": "/scratch/liqiangx/think/results/sxs/noethink_1.7B/ckpt",
+ "samples": 8,
+ "route_sample": true,
+ "sets": {
+  "sxs_test_kk": {
+   "n": 150,
+   "acc_greedy": 0.5333333333333333,
+   "acc_avg8": 0.5316666666666666,
+   "chunk_acc_greedy": 0.7965555555555556,
+   "chunk_acc_sampled": 0.7749027777777777,
+   "FCO_greedy": 207.96,
+   "AIRW_greedy": 127.42206349206349,
+   "ARI_greedy": 281.2421581035727,
+   "n_think_greedy": 294.04,
+   "n_speak_blocks_greedy": 2.58,
+   "n_tokens_greedy": 322.7,
+   "ttft_norm_greedy": 0.6450651635241503,
+   "n_short_greedy": 0.0,
+   "t": 53.61304807662964
+  },
+  "sxs_test_mq": {
+   "n": 125,
+   "acc_greedy": 0.616,
+   "acc_avg8": 0.59,
+   "chunk_acc_greedy": 0.7053333333333334,
+   "chunk_acc_sampled": 0.69925,
+   "FCO_greedy": 39.16,
+   "AIRW_greedy": 38.8604,
+   "ARI_greedy": 75.7476931243642,
+   "n_think_greedy": 93.608,
+   "n_speak_blocks_greedy": 2.424,
+   "n_tokens_greedy": 120.768,
+   "ttft_norm_greedy": 0.34438796640813324,
+   "n_short_greedy": 0.016,
+   "t": 57.732152223587036
+  }
+ }
+}

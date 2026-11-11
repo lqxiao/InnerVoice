@@ -54,3 +54,10 @@ w_unsup 0.5 / w_short 0.05 / w_fco 0.05, eval every 50).
 - job 7 FINISHED (480 steps, ~5 min/step, Succeeded): AIME25 Avg@4 by step: 0 0.183, 50 0.317, 100 0.317, 150 0.367, 200 0.317,
   250 0.383, 300 0.308, 350 0.375, 400 0.325, 450 0.392, 480 **0.408** (unfinished 0.38, FCO 359, 10.2 blocks, 7.5 short, think ~8k).
   Final ckpt copied to p4 FSx results/rl/gl_job7_v5_32x16/ckpt; eval/log/args in results/rl/gl_job7_v5_32x16/ (repo).
+
+## K&K + MuSiQue RL (Apple interleaved-RL replication, p4, 2026-11-11)
+- 1.7B InnerVoice RL (`kk_rl_1.7B_v5`, reward: final + 0.5*final*intermediate - premature - format + v5 stabilisers, 32x8, 1k cap, 300 steps):
+  Average@8 (K&K n=1200, MuSiQue n=1000): SFT start 0.532 / 0.590 -> step 100 0.569 / 0.604 -> step 300 0.561 / 0.591.
+  Greedy: 0.533 / 0.616 -> 0.593 / 0.616 -> 0.573 / 0.632. FCO (K&K) 208 -> 221 -> 255, blocks 2.58 -> 2.36 -> 2.16, short blocks 0 -> 0.02 -> 0.17.
+  => small K&K gain (+3-4 pt, SE ~1.4), no MuSiQue gain; disclosure drifts slightly later / fewer blocks by step 300.
+- 1.7B CoT (think-then-speak) RL (`kk_cotrl_1.7B_v5`), 4B InnerVoice RL (`kk_rl_4B_v5`), 4B CoT RL (`kk_cotrl_4B_v5`): running.
