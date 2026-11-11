@@ -1,6 +1,6 @@
 # Part 2: InnerVoice — token-level disclosure routing with a two-expert last layer (SFT results under the SxS evaluation protocol)
 
-Generated 2026-11-09. All planned SFT runs and evaluations are complete.
+Generated 2026-11-11. All planned SFT runs and evaluations are complete.
 
 ## Summary
 - **InnerVoice** = Qwen3 + LoRA, last-layer FFN -> inner (think) / outer (answer) experts chosen per token by a disclosure gate; think
@@ -343,6 +343,34 @@ gradient weight to 0.2; it is the first design with no flicker through step 100.
 - Gradient-checkpointing bug found during R5: `forward_train` cleared the teacher-forced route before backward, so the last layer's
   recompute used argmax routing (wrong expert on the ~1% label-disagreeing positions). Fixed 2026-11-08; all 4B SFT runs
   (trained with --grad_ckpt) carry this small bias and may be re-run.
+
+## RL round 4 — K&K + MuSiQue (the setting of the Apple interleaved-RL paper), 1.7B and 4B, InnerVoice vs Standard CoT
+
+Same engine trainer and R5 stabilisers as round 3; reward = final correctness + 0.5·correct·(fraction of correct intermediate chunks)
+− premature − format; prompts = the SFT training problems; 32 prompts x 8 rollouts, 1k cap, 300 steps; SFT starts retrained without
+e_think. Evaluation: engine decode with sampled routing, Average@8 at T=1 (K&K 150 x 8, MuSiQue 125 x 8; SE ≈ 1.5 pt) plus greedy;
+TTFT_norm = FCO / response length (Xie et al.'s normalised metric).
+
+| model | stage | K&K Avg@8 | K&K greedy | FCO | blocks | TTFT_norm | MuSiQue Avg@8 | MuSiQue greedy | FCO | TTFT_norm |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1.7B InnerVoice | SFT | 0.532 | 0.533 | 208 | 2.58 | 0.65 | 0.590 | 0.616 | 39 | 0.34 |
+| 1.7B InnerVoice | RL step 100 | 0.569 | 0.593 | 221 | 2.36 | 0.66 | 0.604 | 0.616 | 39 | 0.34 |
+| 1.7B InnerVoice | RL step 300 | 0.561 | 0.573 | 255 | 2.16 | 0.70 | 0.591 | 0.632 | 39 | 0.34 |
+| 1.7B Standard CoT | SFT | 0.547 | 0.567 | 289 | 0.99 | 0.89 | 0.573 | 0.616 | 96 | 0.79 |
+| 1.7B Standard CoT | RL step 150 | 0.609 | 0.653 | 305 | 1.01 | 0.90 | 0.604 | 0.648 | 97 | 0.78 |
+| 1.7B Standard CoT | RL step 300 | 0.603 | 0.620 | 312 | 0.96 | 0.90 | 0.611 | 0.640 | 98 | 0.78 |
+| 4B InnerVoice | SFT | 0.753 | 0.800 | 182 | 2.71 | 0.62 | 0.704 | 0.752 | 39 | 0.33 |
+| 4B InnerVoice | RL step 250 | 0.828 | 0.847 | 176 | 2.57 | 0.63 | 0.771 | 0.776 | 40 | 0.33 |
+| 4B InnerVoice | RL step 300 | 0.834 | 0.840 | 192 | 2.51 | 0.64 | 0.762 | 0.776 | 39 | 0.33 |
+| 4B Standard CoT | SFT | 0.839 | 0.860 | 292 | 0.99 | 0.90 | 0.689 | 0.720 | 98 | 0.78 |
+| 4B Standard CoT | RL step 300 | 0.895 | 0.900 | 287 | 1.00 | 0.89 | 0.739 | 0.736 | 100 | 0.78 |
+
+- RL gains are small at 1.7B (InnerVoice +3.7 / +1.4, CoT +5.6 / +3.1 at the best checkpoint) and larger at 4B (InnerVoice +8.1 / +5.8,
+  CoT +5.6 / +5.0). After RL, Standard CoT leads K&K by 6 pt at 4B (its SFT start is 8.6 pt higher) and InnerVoice leads MuSiQue by 2 pt.
+  Disclosure structure is preserved throughout (2.2-2.8 public blocks, FCO 180-250 / 39, no flicker), so the latency advantage
+  (TTFT_norm 0.62-0.70 vs 0.89-0.90 on K&K; 0.33 vs 0.78 on MuSiQue) is unchanged by RL.
+- Xie et al. report +19 pt for Interleave+IR over Think-answer on Qwen2.5-1.5B-Instruct (K&K 0.533 vs 0.342); their RL starts from an
+  instruct model, ours from SFT models that already score 0.53-0.84, leaving little headroom for the intermediate reward.
 
 ## Reading of the results
 - **Interleaving works mechanically and cuts waiting.** On K&K the InnerVoice 1.7B model emits 2.7 public blocks per puzzle with AIRW 108

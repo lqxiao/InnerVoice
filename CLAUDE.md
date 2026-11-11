@@ -51,6 +51,10 @@
 - 2026-11-09: RL round 3 done (REPORT_PART2.md "RL round 3"): reward v5 (gated bounded Q bonus, soft overlong, KL to frozen SFT,
   flicker penalty, hash-sampled routing) is stable; Greenland 480-step run (32x16, 12k) ends at AIME25 0.408 Avg@4 / 0.404 Avg@8
   (SFT start 0.14-0.19, base thinking 0.342), FCO ~470, think ~8k, 41% unfinished at 12k. Greenland flow: `greenland/README.md`.
+- 2026-11-11: RL round 4 (K&K+MuSiQue, Apple setting; REPORT_PART2.md "RL round 4"): 1.7B/4B InnerVoice vs Standard CoT, both from
+  no-e_think SFT starts; Average@8 gains +4/+1 (1.7B) and +8/+6 (4B) for InnerVoice, +6/+3 and +6/+5 for CoT; latency gap preserved.
+  Engine evaluators: `latent/eval_engine_kk.py`, `latent/eval_engine_aime.py`, `latent/eval_engine_base.py`. p4 is shared: another
+  user's root docker vLLM workers occupy GPUs 0/3/4/5 (35-40 GB each) as of 2026-11-11.
 - Paper draft lives in the private repo `lqxiao/InnerVoice_Paper` (local checkout ~/STP/innervoice-paper); its `tools/build_tables.py` reads this repo via THINK_DIR.
 - Open: voice-stage rewards; longer budgets (paper uses 32k eval / 39k rollout); re-run 4B SFT without the grad-ckpt routing bug;
   self-distillation via the engines.

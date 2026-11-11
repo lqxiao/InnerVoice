@@ -42,6 +42,22 @@ def engine_rl_table():
     return "\n".join(out)
 ENGINE_RL = engine_rl_table()
 
+def kk_rl_table():
+    """K&K / MuSiQue RL (Apple interleaved-RL setting): Average@8 through the engines from results/rl/<run>/kk_mq_avg8_<tag>.json."""
+    runs = [("1.7B InnerVoice", "kk_rl_1.7B_v5", [("sft", "SFT"), ("step100", "RL step 100"), ("final", "RL step 300")]),
+            ("1.7B Standard CoT", "kk_cotrl_1.7B_v5", [("sft", "SFT"), ("step150", "RL step 150"), ("final", "RL step 300")]),
+            ("4B InnerVoice", "kk_rl_4B_v5", [("sft", "SFT"), ("step250", "RL step 250"), ("final", "RL step 300")]),
+            ("4B Standard CoT", "kk_cotrl_4B_v5", [("sft", "SFT"), ("final", "RL step 300")])]
+    out = ["| model | stage | K&K Avg@8 | K&K greedy | FCO | blocks | TTFT_norm | MuSiQue Avg@8 | MuSiQue greedy | FCO | TTFT_norm |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for name, run, tags in runs:
+        for tag, lab in tags:
+            f = f"results/rl/{run}/kk_mq_avg8_{tag}.json"
+            if not os.path.exists(f): continue
+            d = _json.load(open(f))["sets"]; k, m = d["sxs_test_kk"], d["sxs_test_mq"]
+            out.append(f"| {name} | {lab} | {k['acc_avg8']:.3f} | {k['acc_greedy']:.3f} | {k['FCO_greedy']:.0f} | {k['n_speak_blocks_greedy']:.2f} | {k['ttft_norm_greedy']:.2f} | {m['acc_avg8']:.3f} | {m['acc_greedy']:.3f} | {m['FCO_greedy']:.0f} | {m['ttft_norm_greedy']:.2f} |")
+    return "\n".join(out)
+KK_RL = kk_rl_table()
+
 def teacher_table():
     rows = [("dm_", "DeepMath R1 solutions (dataset-provided; think median 1,237 words)", 11684),
             ("q32_", "Qwen3-32B via Bedrock, default effort (think median 374 words)", 2287),
@@ -270,6 +286,22 @@ gradient weight to 0.2; it is the first design with no flicker through step 100.
 - Gradient-checkpointing bug found during R5: `forward_train` cleared the teacher-forced route before backward, so the last layer's
   recompute used argmax routing (wrong expert on the ~1% label-disagreeing positions). Fixed 2026-11-08; all 4B SFT runs
   (trained with --grad_ckpt) carry this small bias and may be re-run.
+
+## RL round 4 — K&K + MuSiQue (the setting of the Apple interleaved-RL paper), 1.7B and 4B, InnerVoice vs Standard CoT
+
+Same engine trainer and R5 stabilisers as round 3; reward = final correctness + 0.5·correct·(fraction of correct intermediate chunks)
+− premature − format; prompts = the SFT training problems; 32 prompts x 8 rollouts, 1k cap, 300 steps; SFT starts retrained without
+e_think. Evaluation: engine decode with sampled routing, Average@8 at T=1 (K&K 150 x 8, MuSiQue 125 x 8; SE ≈ 1.5 pt) plus greedy;
+TTFT_norm = FCO / response length (Xie et al.'s normalised metric).
+
+{KK_RL}
+
+- RL gains are small at 1.7B (InnerVoice +3.7 / +1.4, CoT +5.6 / +3.1 at the best checkpoint) and larger at 4B (InnerVoice +8.1 / +5.8,
+  CoT +5.6 / +5.0). After RL, Standard CoT leads K&K by 6 pt at 4B (its SFT start is 8.6 pt higher) and InnerVoice leads MuSiQue by 2 pt.
+  Disclosure structure is preserved throughout (2.2-2.8 public blocks, FCO 180-250 / 39, no flicker), so the latency advantage
+  (TTFT_norm 0.62-0.70 vs 0.89-0.90 on K&K; 0.33 vs 0.78 on MuSiQue) is unchanged by RL.
+- Xie et al. report +19 pt for Interleave+IR over Think-answer on Qwen2.5-1.5B-Instruct (K&K 0.533 vs 0.342); their RL starts from an
+  instruct model, ours from SFT models that already score 0.53-0.84, leaving little headroom for the intermediate reward.
 
 ## Reading of the results
 - **Interleaving works mechanically and cuts waiting.** On K&K the InnerVoice 1.7B model emits 2.7 public blocks per puzzle with AIRW 108
