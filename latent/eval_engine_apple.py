@@ -6,9 +6,9 @@ import argparse, json, os, sys, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from transformers import AutoTokenizer
 from latent.sxs_rl_engine import Engines
-from latent.apple_rl import TEMPLATES, TASK_HINT, parse_tags, token_types_from_tags, public_lines, score_final
+from latent.apple_rl import TEMPLATES, TASK_HINT, parse_tags, token_types_from_tags, public_lines, score_final, TAG_RE
 ap = argparse.ArgumentParser(); ap.add_argument("--model", default="Qwen/Qwen3-1.7B"); ap.add_argument("--engines", required=True); ap.add_argument("--template", default="interleave", choices=list(TEMPLATES))
-ap.add_argument("--data", required=True); ap.add_argument("--samples", type=int, default=8); ap.add_argument("--max_new", type=int, default=2048); ap.add_argument("--temperature", type=float, default=0.8); ap.add_argument("--out", required=True)
+ap.add_argument("--data", required=True); ap.add_argument("--samples", type=int, default=8); ap.add_argument("--max_new", type=int, default=2048); ap.add_argument("--temperature", type=float, default=0.8); ap.add_argument("--out", required=True); ap.add_argument("--lenient", action="store_true", help="no <answer> tags -> score the whole response (for Direct / CoT prompting baselines, as Xie et al. do)")
 a = ap.parse_args()
 tok = AutoTokenizer.from_pretrained(a.model); im_end = tok.convert_tokens_to_ids("<|im_end|>")
 eng = Engines(a.engines.split(","), [im_end, tok.eos_token_id], im_end); eng.wait_ready()
@@ -20,7 +20,9 @@ for f in a.data.split(","):
     rows = [json.loads(l) for l in open(f)]; name = os.path.basename(f).replace(".jsonl", ""); ids = [build(r) for r in rows]
     t0 = time.time(); tg, fg = eng.generate(ids, 1, 0.0, a.max_new); ts, fs = eng.generate(ids, a.samples, a.temperature, a.max_new)
     def rec(r, t, fin):
-        segs, fmt = parse_tags(tok.decode(t, skip_special_tokens=True)); ok, oks, _ = score_final(r, public_lines(segs)); _, first = token_types_from_tags(tok, t)
+        text = tok.decode(t, skip_special_tokens=True); segs, fmt = parse_tags(text); lines = public_lines(segs)
+        if a.lenient and not lines: lines = [l.strip() for l in TAG_RE.sub("", text).split("\n") if l.strip()]
+        ok, oks, _ = score_final(r, lines); _, first = token_types_from_tags(tok, t)
         inter = oks[:-1] if r["source"] == "musique" else oks
         return {"n": r.get("n"), "ok": float(ok), "format_ok": float(fmt), "finished": fin, "ttft_norm": first / max(1, len(t)), "n_answer_segs": float(sum(1 for m, _ in segs if m == "answer")), "n_tokens": len(t), "inter_frac": (sum(inter) / len(inter)) if inter else 0.0}
     G = [rec(r, t, f) for r, t, f in zip(rows, tg, fg)]; S = [rec(rows[i // a.samples], t, f) for i, (t, f) in enumerate(zip(ts, fs))]
