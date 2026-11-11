@@ -19,7 +19,8 @@
   (code+data+results, no ckpts), `env.sh` → `source .../innervoice/env.sh` on any host. This is the user's real FSx home
   (`/home/liqiangx` on p41/p43 points to the unmounted `/fsx-multimodal` and is dead; p40/p4 have local homes). Local copies on
   `/scratch/liqiangx` (p41, p4) still exist; the root disks there are nearly full — prefer FSx for new work.
-- Docker images available: `vllm/vllm-openai:v0.9.1` on p40 AND p4 (p4 docker root is `/tmp/instance_storage/docker_image`, 500 GB free;
+- Docker images available: `vllm/vllm-openai:v0.9.1` on p40, p4 AND p41 (pulled 2026-11-11; p41 docker root is `/tmp/instance_storage/docker`,
+  3.8 TB free, all 8 GPUs were idle; scratch `/tmp/instance_storage/liqiangx`) (p4 docker root is `/tmp/instance_storage/docker_image`, 500 GB free;
   `/tmp/instance_storage/liqiangx/` is our fast local scratch there), `slimerl/slime:latest` (SGLang 0.5.15) on p41. These are the only way
   to run an inference engine here (pip vLLM/SGLang cannot be installed on glibc 2.26). p40's GPUs are mostly taken by other users now.
 - **RL Scenario B stack (engine rollouts):** `latent/vllm_plugin/` (vLLM model class `InnerVoiceQwen3ForCausalLM`: last-layer two experts +
