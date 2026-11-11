@@ -17,7 +17,7 @@ for spec in $SPECS; do
     -c "cp -r $H/think/latent/vllm_plugin /tmp/plugin && pip install -q --no-deps --no-build-isolation /tmp/plugin >/tmp/pip.log 2>&1; python3 $H/think/latent/vllm_server.py --model $EXP --port $PORT --max_model_len 4096 --max_num_seqs 128 --gpu_mem ${GPU_MEM:-0.3}" >/dev/null
   for i in $(seq 1 60); do sudo -n docker logs iv_engine_$GPU 2>&1 | grep -q -E "SERVER_READY|Traceback" && break; sleep 10; done
   sudo -n docker logs iv_engine_$GPU 2>&1 | grep -v "retrieving safetensors" | grep -E "SERVER_READY|Error" | tail -2 | cut -c1-200
-  CUDA_VISIBLE_DEVICES=$GPU python latent/eval_engine_kk.py --model $M --ckpt $CK --engines http://127.0.0.1:$PORT --data data_apple/test_kk_ivprompt.jsonl,data_apple/test_mq_ivprompt.jsonl --stride 1 --limit 1000 --samples $SAMPLES --max_new 2048 --out results/rl/apple/$TAG.json --route_sample > logs/eval_apple_$TAG.log 2>&1
+  CUDA_VISIBLE_DEVICES=$GPU python latent/eval_engine_kk.py --model $M --ckpt $CK --engines http://127.0.0.1:$PORT --data data_apple/test_kk_ivprompt.jsonl,data_apple/test_mq_ivprompt.jsonl --stride 1 --limit 1000 --samples $SAMPLES --max_new 2048 --out results/rl/apple/$TAG.json --route_sample --label_bs ${LABEL_BS:-16} > logs/eval_apple_$TAG.log 2>&1
   grep -E "^test_|Error" logs/eval_apple_$TAG.log | cut -c1-250
 done
 sudo -n docker rm -f iv_engine_$GPU >/dev/null 2>&1; echo iv_evals_done

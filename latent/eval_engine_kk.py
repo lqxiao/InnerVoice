@@ -8,7 +8,7 @@ from latent.sxs_rl_engine import Engines, label_types
 from latent.sxs_rl import disclosure_stats, public_chunks
 from latent.sxs_eval import token_metrics, score_kk, score_mq
 ap = argparse.ArgumentParser(); ap.add_argument("--model", default="Qwen/Qwen3-1.7B"); ap.add_argument("--ckpt", required=True); ap.add_argument("--engines", required=True); ap.add_argument("--data", required=True)
-ap.add_argument("--stride", type=int, default=4); ap.add_argument("--limit", type=int, default=150); ap.add_argument("--samples", type=int, default=8); ap.add_argument("--max_new", type=int, default=1024); ap.add_argument("--out", required=True); ap.add_argument("--route_sample", action="store_true")
+ap.add_argument("--stride", type=int, default=4); ap.add_argument("--limit", type=int, default=150); ap.add_argument("--samples", type=int, default=8); ap.add_argument("--max_new", type=int, default=1024); ap.add_argument("--out", required=True); ap.add_argument("--route_sample", action="store_true"); ap.add_argument("--label_bs", type=int, default=16)
 a = ap.parse_args()
 m = SxSModel(SxSConfig(model_name=a.model, use_e_think=False, route_sample=a.route_sample), device="cuda"); m.load(a.ckpt); m.eval(); tok = m.tok
 eng = Engines(a.engines.split(","), [m.eos_id, tok.eos_token_id], m.eos_id); eng.wait_ready(); summ = {"model": a.model, "ckpt": a.ckpt, "samples": a.samples, "route_sample": a.route_sample, "sets": {}}
@@ -16,7 +16,7 @@ for f in a.data.split(","):
     rows = [json.loads(l) for l in open(f)][::a.stride][:a.limit]; name = os.path.basename(f).replace(".jsonl", "")
     ids = [tok(tok.apply_chat_template([{"role": "user", "content": r["prompt"]}], tokenize=False, add_generation_prompt=True, enable_thinking=False), add_special_tokens=False)["input_ids"] for r in rows]
     t0 = time.time(); tg, fg = eng.generate(ids, 1, 0.0, a.max_new); ts, fs = eng.generate(ids, a.samples, 1.0, a.max_new)
-    lg = label_types(m, tok, ids, tg, list(range(len(tg))), 16, "cuda"); p_s = [ids[i // a.samples] for i in range(len(ts))]; ls_ = label_types(m, tok, p_s, ts, list(range(len(ts))), 16, "cuda")
+    lg = label_types(m, tok, ids, tg, list(range(len(tg))), a.label_bs, "cuda"); p_s = [ids[i // a.samples] for i in range(len(ts))]; ls_ = label_types(m, tok, p_s, ts, list(range(len(ts))), a.label_bs, "cuda")
     def rec(r, t, y, fin):
         ch = public_chunks(tok, t, y); tm = token_metrics(y, t, tok, r["source"]); ds = disclosure_stats(tok, t, y, r["prompt"])
         oks, ok = (score_kk(ch, r["chunk_checks"]) if r["source"] == "kk" else score_mq(ch, r["chunk_checks"]))
