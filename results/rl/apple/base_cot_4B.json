@@ -1,0 +1,43 @@
+{
+ "model": "Qwen/Qwen3-4B",
+ "template": "cot",
+ "samples": 4,
+ "temperature": 0.8,
+ "sets": {
+  "test_kk": {
+   "n": 300,
+   "acc_greedy": 0.61,
+   "acc_avg4": 0.615,
+   "format_greedy": 0.6133333333333333,
+   "format_sampled": 0.615,
+   "unfinished_greedy": 0.3833333333333333,
+   "ttft_norm_greedy": 0.9866456853413096,
+   "n_answer_segs_greedy": 0.6133333333333333,
+   "n_tokens_greedy": 1671.8366666666666,
+   "inter_frac_greedy": 0.6125,
+   "acc_greedy_by_n": {
+    "3": 0.7,
+    "4": 0.63,
+    "5": 0.5
+   },
+   "t": 1095.25448179245
+  },
+  "test_mq": {
+   "n": 185,
+   "acc_greedy": 0.021621621621621623,
+   "acc_avg4": 0.031081081081081083,
+   "format_greedy": 0.02702702702702703,
+   "format_sampled": 0.0445945945945946,
+   "unfinished_greedy": 0.2648648648648648,
+   "ttft_norm_greedy": 1.000726931789325,
+   "n_answer_segs_greedy": 0.02702702702702703,
+   "n_tokens_greedy": 1238.0,
+   "inter_frac_greedy": 0.0,
+   "acc_greedy_by_n": {
+    "3": 0.03,
+    "4": 0.011764705882352941
+   },
+   "t": 569.4475026130676
+  }
+ }
+}
